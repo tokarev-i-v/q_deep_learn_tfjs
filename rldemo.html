@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>ConvNetJS Deep Q Learning Reinforcement Learning with Neural Network demo</title>
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src='./src/js/three.min.js'></script>
+  <script src="./src/js/convnet.js"></script>
+  <script src="./src/js/util.js"></script>
+  <script src="./src/js/vis.js"></script>
+  <script src="./src/js/deepqlearn.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  
+  <script src="./src/js/rldemo.js"></script>
+  <style type="text/css">
+      canvas { border: 1px solid white; }
+    </style>
+
+ </head>
+ <body onload="start();">
+   <div id="wrap">
+   <h2><a href="http://cs.stanford.edu/people/karpathy/convnetjs/">ConvNetJS</a> Deep Q Learning Demo</h2>
+   <h1>Description</h1>
+   <p>
+   This demo follows the description of the Deep Q Learning algorithm described in 
+   <a href="http://arxiv.org/pdf/1312.5602v1.pdf">Playing Atari with Deep Reinforcement Learning</a>, 
+   a paper from NIPS 2013 Deep Learning Workshop from DeepMind. The paper is a nice demo of a fairly
+   standard (model-free) Reinforcement Learning algorithm (Q Learning) learning to play Atari games.
+   </p>
+   <p>
+   In this demo, instead of Atari games, we'll start out with something more simple: 
+   a 2D agent that has 9 eyes pointing in different angles ahead and every eye senses 3 values
+   along its direction (up to a certain maximum visibility distance): distance to a wall, distance to 
+   a green thing, or distance to a red thing. The agent navigates by using one of 5 actions that turn 
+   it different angles. The red things are apples and the agent gets reward for eating them. The green
+   things are poison and the agent gets negative reward for eating them. The training takes a few tens
+   of minutes with current parameter settings.
+   </p>
+   <p>
+   Over time, the agent learns to avoid states that lead to states with low rewards, and picks actions
+   that lead to better states instead.
+   </p>
+   <h1>Q-Learner full specification and options</h1>
+   <p>
+   The textfield below gets eval()'d to produce the Q-learner for this demo. This allows you to fiddle with 
+   various parameters and settings and also shows how you can use the API for your own purposes. 
+   All of these settings are optional but are listed to give an idea of possibilities.
+   Feel free to change things around and hit reload! Documentation for all
+   options is the paper linked to above, and there are also 
+   comments for every option in the source code javascript file.
+   </p>
+   <textarea id="qspec" style="width:100%; height:200px;">
+var num_inputs = 27; // 9 eyes, each sees 3 numbers (wall, green, red thing proximity)
+var num_actions = 5; // 5 possible angles agent can turn
+var temporal_window = 1; // amount of temporal memory. 0 = agent lives in-the-moment :)
+var network_size = num_inputs*temporal_window + num_actions*temporal_window + num_inputs;
+
+// the value function network computes a value of taking any of the possible actions
+// given an input state. Here we specify one explicitly the hard way
+// but user could also equivalently instead use opt.hidden_layer_sizes = [20,20]
+// to just insert simple relu hidden layers.
+var layer_defs = [];
+layer_defs.push({type:'input', out_sx:1, out_sy:1, out_depth:network_size});
+layer_defs.push({type:'fc', num_neurons: 50, activation:'relu'});
+layer_defs.push({type:'fc', num_neurons: 50, activation:'relu'});
+layer_defs.push({type:'regression', num_neurons:num_actions});
+
+// options for the Temporal Difference learner that trains the above net
+// by backpropping the temporal difference learning rule.
+var tdtrainer_options = {learning_rate:0.001, momentum:0.0, batch_size:64, l2_decay:0.01};
+
+var opt = {};
+opt.temporal_window = temporal_window;
+opt.experience_size = 30000;
+opt.start_learn_threshold = 1000;
+opt.gamma = 0.7;
+opt.learning_steps_total = 200000;
+opt.learning_steps_burnin = 3000;
+opt.epsilon_min = 0.05;
+opt.epsilon_test_time = 0.05;
+opt.layer_defs = layer_defs;
+opt.tdtrainer_options = tdtrainer_options;
+
+var brain = new deepqlearn.Brain(num_inputs, num_actions, opt); // woohoo
+   </textarea>
+   <button onclick="reload()" style="width: 200px; height: 30px; margin-top: 5px;">Reload</button>
+   
+   <h1>State Visualizations</h1>
+   
+   <div><b>Left</b>: Current input state (quite a useless thing to look at). <b>Right</b>: Average reward over time (this should go up as agent becomes better on average at collecting rewards)</div>
+   <canvas id="vis_canvas" width="350" height="150"></canvas>
+   <canvas id="graph_canvas" width="350" height="150"></canvas><br />
+   <canvas id="net_canvas" width="700" height="200"></canvas><br />
+
+   <div style="font-size:13px;">
+   (Takes ~10 minutes to train with current settings. If you're impatient, scroll down and load an example pre-trained network from pre-filled JSON)
+   </div>
+   <canvas id="canvas" width="700" height="500"></canvas>
+   <div id="brain_info_div"></div>
+   
+   <h1>Controls</h1>
+   <button onclick="goveryfast()">Go very fast</button>
+   <button onclick="gofast()">Go fast</button>
+   <button onclick="gonormal()">Go normal speed</button>
+   <button onclick="goslow()">Go slow</button><br />
+   <button onclick="startlearn()">Start Learning</button>
+   <button onclick="stoplearn()">Stop Learning</button>
+   
+   <h1>I/O</h1>
+   <p>
+   You can save and load a network from JSON here. Note that the textfield is prefilled with a
+   pretrained network that works reasonable well, if you're impatient to let yours train enough.
+   Just hit the load button!
+   </p>
+   <button onclick="savenet()">Save network to JSON</button>
+   <button onclick="loadnet()">Load network from JSON</button>
+ 
+   <br />
+   
+   </div>
+ </body>
+</html>
