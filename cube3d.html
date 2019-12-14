@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf8" />
+        <title>SkyFox Forest Walking</title>
+        <link rel="stylesheet" type="text/css" href="src/src/css/styles.css" />
+        <link rel="stylesheet" type="text/css" href="src/src/css/MovingButtons.css" />
+        <script src="./src/src/js/three.min.js"></script>
+        <script src="src/src/js/stats.min.js"></script>
+        <script src="src/src/js/ColladaLoader.js"></script>
+        <script src="src/src/js/hammer.min.js"></script>
+        <script src="src/src/js/DeviceOrientationControls.js"></script>
+        <script src="src/src/js/FlyControls.js"></script>
+        <script src="src/src/js/ComputerMobileControls.js"></script>
+    </head>
+    <body>
+
+<script>
+let DEVICE_TYPES = {
+    DESKTOP: 0,
+    MOBILE: 1
+};
+    
+class Program {
+    constructor(){
+        this.render = this.render.bind(this);
+        this.Container = document.createElement("div");
+        this.Container.id = "MainContainer";
+        this.Container.classList.add("Container");
+
+        this.Renderer = new THREE.WebGLRenderer();
+        this.Renderer.setSize(window.innerWidth, window.innerHeight);
+        this.Container.appendChild(this.Renderer.domElement);
+        document.body.appendChild(this.Container);
+
+        this.stats = new Stats();
+        document.body.appendChild(this.stats.dom);
+        
+        this.Camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 10000);
+        this.Camera.position.set(0,0, 10);
+        this.Scene = new THREE.Scene();
+        this.Scene.background = new THREE.Color( 0xaaccff );
+        this.Scene.fog = new THREE.FogExp2( 0xaaccff, 0.007 );
+        //        this.Scene.add(this.Camera);
+
+        this.Object = new THREE.Mesh(
+            new THREE.BoxBufferGeometry(10, 10, 10),
+            new THREE.MeshPhongMaterial({color: 0xf1d2a4})
+        );
+        let r = 10;
+        let alpha = 10;
+        for (let i = 0; i < 10; i++){
+            let mesh = new THREE.Mesh(
+                new THREE.CylinderBufferGeometry(1, 1, 5, 8),
+                new THREE.MeshPhongMaterial({color: 0xf12222})
+            );
+            mesh.position.x = Math.sin(Math.PI*alpha/180)*r;
+            mesh.position.y = Math.cos(Math.PI*alpha/180)*r;
+            mesh.rotation.z = Math.PI*alpha/180;
+            this.Object.add(mesh);
+            alpha += 10;
+        }
+        this.Scene.add(this.Object);
+
+        // this.Loader = new THREE.ColladaLoader();
+//        this.Loader.load("./src/scenes/telefermer.dae", function (dae) {
+//            dae.scene.scale.set(10,10,10);
+//            this.Scene.add(dae.scene);
+//        }.bind(this));
+
+        this.AmbientLight = new THREE.AmbientLight(0xFFFFFF, 0.9);
+        this.Scene.add(this.AmbientLight);
+
+        var testExp = new RegExp('Android|webOS|iPhone|iPad|' +
+                                    'BlackBerry|Windows Phone|'  +
+                                    'Opera Mini|IEMobile|Mobile' , 
+                                'i');
+
+        if (testExp.test(navigator.userAgent)){
+            this.DeviceType = DEVICE_TYPES.MOBILE;
+        }else{
+            this.DeviceType = DEVICE_TYPES.DESKTOP;
+        }
+
+
+        if(this.DeviceType === DEVICE_TYPES.MOBILE)
+		{
+			this.Controls = new THREEx.ComputerMobileControls({
+                Camera: this.Camera,
+                MovingSpeed: 10,
+                RotationSpeed: 30
+			});
+		} else {
+            this.ControlObject = new THREE.Object3D();
+            // this.Camera.position.set(-1, 1.2, -0.35);
+            this.Scene.add(this.ControlObject);
+            this.ControlObject.add(this.Camera);
+            this.Controls = new THREE.FlyControls(this.Camera, document.getElementById("MainContainer"));
+			this.Controls.movementSpeed = 13;
+			this.Controls.rollSpeed = Math.PI / 8;
+			this.Controls.autoForward = false;
+			this.Controls.dragToLook = false;
+		}
+
+        this.Clock = new THREE.Clock();
+
+        // let loader = new THREE.ColladaLoader();
+        // loader.load("./src/src/models/fox_run.dae", function (dae){
+        //     this.ControlObject.add(dae.scene);
+        //     dae.scene.rotation.z += Math.PI;
+        //     dae.scene.scale.set(0.5, 0.5, 0.5);
+        //     var animations = dae.animations;
+		// 	var avatar = dae.scene;
+		// 	dae.scene.children[1].material.color = new THREE.Color(0xFFFFFF);
+		// 	dae.scene.children[1].material.needsUpdate = true;
+            
+
+		// 	this.Mixer = new THREE.AnimationMixer( avatar );
+		// 	var action = this.Mixer.clipAction( animations[ 0 ] ).play();
+        // }.bind(this));    
+
+        // let TextureLoader = new THREE.TextureLoader();
+        // TextureLoader.load("./src/src/models/forest/grass.png", function (tex) {
+        //     tex.wrapS = THREE.RepeatWrapping;
+        //     tex.wrapT = THREE.RepeatWrapping;
+        //     tex.repeat.set(100, 100);
+        //     let ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), new THREE.MeshBasicMaterial({map: tex}));
+        //     ground.rotation.x -= Math.PI/2;
+        //     this.Scene.add(ground);
+        // }.bind(this));
+
+//         loader.load("./src/src/models/forest/forest1.dae", function (dae){
+//             let BloodwoodTree = dae.scene.getChildByName("BloodwoodTree");
+//             let Grass = dae.scene.getChildByName("Grass");
+//             let Hedgehog = dae.scene.getChildByName("Hedgehog");
+//             let Mushrooms = dae.scene.getChildByName("Mushrooms");
+//             let PineTree = dae.scene.getChildByName("PineTree");
+//             let Rabbit = dae.scene.getChildByName("Rabbit");
+//             let SycamoreTree = dae.scene.getChildByName("SycamoreTree");
+
+// //            Grass.scale.set(0.1,0.1,0.1);
+// //            Mushrooms.scale.set(0.001, 0.001, 0.001);
+// //            Rabbit.scale.set(4,4,4);
+
+// //            dae.scene.rotation.z+= Math.PI;
+            
+//             let obj_arr = [BloodwoodTree, SycamoreTree, Grass, Hedgehog, Mushrooms, PineTree, Rabbit];
+//             this.WIDTH_SIZE = 1000; this.HEIGHT_SIZE = 1000;
+//             for(let i = 0; i < obj_arr.length; i++)
+//             {
+//                 obj_arr[i].rotation.x -= Math.PI/2;          
+//                 if(obj_arr[i].name === "Grass")
+//                 {
+//                     this.copyObjectOnScene(obj_arr[i], 4000, 0.1, true);
+//                 }
+//                 if(obj_arr[i].name === "Mushrooms")
+//                 {
+//                     this.copyObjectOnScene(obj_arr[i], 20, 0.001);
+//                 }
+//                 if(obj_arr[i].name === "Hedgehog")
+//                 {
+//                     this.copyObjectOnScene(obj_arr[i], 20, 0.01);
+//                 }
+//                 if(obj_arr[i].name === "BloodwoodTree")
+//                 {
+//                     this.copyObjectOnScene(obj_arr[i], 500, 1);
+//                 }
+//                 if(obj_arr[i].name === "PineTree")
+//                 {
+//                     this.copyObjectOnScene(obj_arr[i], 500, 1);
+//                 }
+//                 if(obj_arr[i].name === "SycamoreTree")
+//                 {
+//                     this.copyObjectOnScene(obj_arr[i], 100, 1);
+//                 }
+//                 if(obj_arr[i].name === "Rabbit")
+//                 {
+//                     this.copyObjectOnScene(obj_arr[i], 100, 100);
+//                 }
+//             }
+//         }.bind(this));
+
+
+        this.render();
+
+    }
+
+    copyObjectOnScene(obj,count, scale, rand){
+        for(let j = 0; j < count; j++){
+            let mesh = obj.clone();
+            //let mesh = new THREE.Mesh(obj.geometry, obj.material);
+            if(rand){
+                let sc = Math.random();
+                mesh.scale.set(scale*sc+(0.2*scale), scale*sc+(0.2*scale), scale*sc+(0.2*scale));
+            
+            }
+            else
+                mesh.scale.set(scale, scale, scale);
+            mesh.position.set(Math.random()*this.WIDTH_SIZE-(this.WIDTH_SIZE/2), 0, Math.random()*this.HEIGHT_SIZE-(this.HEIGHT_SIZE/2));
+            this.Scene.add(mesh);
+        }
+    }
+
+    render () {
+        requestAnimationFrame(this.render);
+        this.stats.update();
+        this.ControlObject.position.y = 0;
+        
+        this.Renderer.render(this.Scene, this.Camera);
+        var delta = this.Clock.getDelta();
+        // if(this.Controls.moveState.forward || this.Controls.moveState.back){
+        //     if (this.Mixer !== undefined ) {
+        //         this.Mixer.update(delta);
+        //     }
+        // }
+        if (this.Mixer !== undefined ) {
+                this.Mixer.update(delta);
+            }
+        
+        this.Controls.update(delta);
+    }
+};
+
+let Prog = new Program();
+</script>    
+
+    </body>
+</html>

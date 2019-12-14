@@ -2,14 +2,15 @@
     
   class Food {
     constructor(){
-      this.view = new THREE.Mesh(
+      this._view = new THREE.Mesh(
         new THREE.SphereBufferGeometry(1,1,1),
         new THREE.MeshBasicMaterial({color: 0x111111})
       )
       
     }
     get boundingBox(){
-      return this.view.geometry.boundingBox();
+      this._view.geometry.computeBoundingBox();
+      return this.view.geometry.boundingBox;
     }
   }
   class Poison {
@@ -33,7 +34,7 @@
       
    
       // positional information
-      this.p = new Vec(50, 50);
+      this.p = new THREE.Vector3(50, 50, 0);
       this.op = this.p; // old position
       this.angle = 0; // direction facing
       
@@ -50,10 +51,10 @@
       for(var k=0;k<9;k++) { this.eyes.push(new Eye((k-3)*0.25)); }
       
       // braaain
-      //this.brain = new deepqlearn.Brain(this.eyes.length * 3, this.actions.length);
+      this.brain = new deepqlearn.Brain(this.eyes.length * 3, this.actions.length);
       var spec = document.getElementById('qspec').value;
       eval(spec);
-      this.brain = brain;
+      //this.brain = brain;
       
       this.reward_bonus = 0.0;
       this.digestion_signal = 0.0;
@@ -66,7 +67,7 @@
 
     }
     intersects(obj){
-      if(this.eye.view.geometry.intersects(obj.boundingBox())){
+      if(this.boundingBox.intersects(obj.boundingBox)){
         return true;
       } else{
         return false;
@@ -158,6 +159,10 @@
     get sensed_type(){
       return this._sensed_type;
     }
+    get boundingBox(){
+      this._view.geometry.computeBoundingBox();
+      return this._view.geometry.boundingBox;
+    }
   }
 
     
@@ -181,21 +186,18 @@
       return false;
     }
 
-    // Wall is made up of two points
-    var Wall = function(p1, p2) {
-      this.p1 = p1;
-      this.p2 = p2;
-    }
+
 
     class Wall {
-      constructor(point, w_h_d){
+      constructor(p1, p2){
         this._view = new THREE.Mesh(
           new THREE.CubeBufferGeometry(),
           new THREE.MeshBasicMaterial({color: 0xf2f2f2})
         );
-        this._view.geometry.computeBoundingBox();
+        
       }
       get boundingBox(){
+        this._view.geometry.computeBoundingBox();
         return this._view.geometry.boundingBox;
       }
     }
@@ -232,57 +234,23 @@
           var y = convnetjs.randf(20, this.H-20);
           var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
           if (t == 1){
-            var it = new Food(new Vector3(x, y, 0));
+            var it = new Food(new THREE.Vector3(x, y, 0));
           }
           else{
-            var it = new Poison(new Vector3(x, y, 0));
+            var it = new Poison(new THREE.Vector3(x, y, 0));
           }
           this.items.push(it);
         }
-      }
-    }
-    
-    World.prototype = {      
+      }   
       // helper function to get closest colliding walls/items
-      stuff_collide_: function(p1, p2, check_walls, check_items) {
+      stuff_collide_(eye, check_walls, check_items) {
         var minres = false;
         
-        // collide with walls
-        if(check_walls) {
-          for(var i=0,n=this.walls.length;i<n;i++) {
-            var wall = this.walls[i];
-            var res = line_intersect(p1, p2, wall.p1, wall.p2);
-            if(res) {
-              res.type = 0; // 0 is wall
-              if(!minres) { minres=res; }
-              else {
-                // check if its closer
-                if(res.ua < minres.ua) {
-                  // if yes replace it
-                  minres = res;
-                }
-              }
-            }
-          }
-        }
         
-        // collide with items
-        if(check_items) {
-          for(var i=0,n=this.items.length;i<n;i++) {
-            var it = this.items[i];
-            var res = line_point_intersect(p1, p2, it.p, it.rad);
-            if(res) {
-              res.type = it.type; // store type of item
-              if(!minres) { minres=res; }
-              else { if(res.ua < minres.ua) { minres = res; }
-              }
-            }
-          }
-        }
         
         return minres;
-      },
-      tick: function() {
+      }
+      tick() {
         // tick the environment
         this.clock++;
         
@@ -318,7 +286,7 @@
           a.oangle = a.angle; // and angle
           
           // steer the agent according to outputs of wheel velocities
-          var v = new Vec(0, a.rad / 2.0);
+          var v = new THREE.Vector3(0, a.rad / 2.0);
           v = v.rotate(a.angle + Math.PI/2);
           var w1p = a.p.add(v); // positions of wheel 1 and 2
           var w2p = a.p.sub(v);
