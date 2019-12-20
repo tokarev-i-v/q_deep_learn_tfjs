@@ -1,174 +1,41 @@
   var canvas, ctx;
     
-  class Food {
-    constructor(){
-      this._view = new THREE.Mesh(
-        new THREE.SphereBufferGeometry(1,1,1),
-        new THREE.MeshBasicMaterial({color: 0x111111})
-      )
-      
+    // A 2D vector utility
+    var Vec = function(x, y) {
+      this.x = x;
+      this.y = y;
     }
-    get boundingBox(){
-      this._view.geometry.computeBoundingBox();
-      return this.view.geometry.boundingBox;
+    Vec.prototype = {
+      
+      // utilities
+      dist_from: function(v) { return Math.sqrt(Math.pow(this.x-v.x,2) + Math.pow(this.y-v.y,2)); },
+      length: function() { return Math.sqrt(Math.pow(this.x,2) + Math.pow(this.y,2)); },
+      
+      // new vector returning operations
+      add: function(v) { return new Vec(this.x + v.x, this.y + v.y); },
+      sub: function(v) { return new Vec(this.x - v.x, this.y - v.y); },
+      rotate: function(a) {  // CLOCKWISE
+        return new Vec(this.x * Math.cos(a) + this.y * Math.sin(a),
+                       -this.x * Math.sin(a) + this.y * Math.cos(a));
+      },
+      
+      // in place operations
+      scale: function(s) { this.x *= s; this.y *= s; },
+      normalize: function() { var d = this.length(); this.scale(1.0/d); }
     }
-  }
-  class Poison {
-    constructor(){
-      this.view = new THREE.Mesh(
-        new THREE.SphereBufferGeometry(1,1,1),
-        new THREE.MeshBasicMaterial({color: 0x111111})
-      )
-    }
-  }
-
-  class Agent{
-    constructor(){
-      this.view = new THREE.Mesh(
-        new THREE.BoxBufferGeometry(1,1,1),
-        new THREE.MeshBasicMaterial({color: 0x111111})
-      );
-      this.eye = new Eye();
-      this.view.add(this.eye.view);
-      
-      
-   
-      // positional information
-      this.p = new THREE.Vector3(50, 50, 0);
-      this.op = this.p; // old position
-      this.angle = 0; // direction facing
-      
-      this.actions = [];
-      this.actions.push([1,1]);
-      this.actions.push([0.8,1]);
-      this.actions.push([1,0.8]);
-      this.actions.push([0.5,0]);
-      this.actions.push([0,0.5]);
-      
-      // properties
-      this.rad = 10;
-      this.eyes = [];
-      for(var k=0;k<9;k++) { this.eyes.push(new Eye((k-3)*0.25)); }
-      
-      // braaain
-      this.brain = new deepqlearn.Brain(this.eyes.length * 3, this.actions.length);
-      var spec = document.getElementById('qspec').value;
-      eval(spec);
-      //this.brain = brain;
-      
-      this.reward_bonus = 0.0;
-      this.digestion_signal = 0.0;
-      
-      // outputs on world
-      this.rot1 = 0.0; // rotation speed of 1st wheel
-      this.rot2 = 0.0; // rotation speed of 2nd wheel
-      
-      this.prevactionix = -1;
-
-    }
-    intersects(obj){
-      if(this.boundingBox.intersects(obj.boundingBox)){
-        return true;
-      } else{
-        return false;
+    
+    // line intersection helper function: does line segment (p1,p2) intersect segment (p3,p4) ?
+    var line_intersect = function(p1,p2,p3,p4) {
+      var denom = (p4.y-p3.y)*(p2.x-p1.x)-(p4.x-p3.x)*(p2.y-p1.y);
+      if(denom===0.0) { return false; } // parallel lines
+      var ua = ((p4.x-p3.x)*(p1.y-p3.y)-(p4.y-p3.y)*(p1.x-p3.x))/denom;
+      var ub = ((p2.x-p1.x)*(p1.y-p3.y)-(p2.y-p1.y)*(p1.x-p3.x))/denom;
+      if(ua>0.0&&ua<1.0&&ub>0.0&&ub<1.0) {
+        var up = new Vec(p1.x+ua*(p2.x-p1.x), p1.y+ua*(p2.y-p1.y));
+        return {ua:ua, ub:ub, up:up}; // up is intersection point
       }
+      return false;
     }
-
-    forward() {
-      // in forward pass the agent simply behaves in the environment
-      // create input to brain
-      var num_eyes = this.eyes.length;
-      var input_array = new Array(num_eyes * 3);
-      for(var i=0;i<num_eyes;i++) {
-        var e = this.eyes[i];
-        input_array[i*3] = 1.0;
-        input_array[i*3+1] = 1.0;
-        input_array[i*3+2] = 1.0;
-        if(e.sensed_type !== -1) {
-          // sensed_type is 0 for wall, 1 for food and 2 for poison.
-          // lets do a 1-of-k encoding into the input array
-          input_array[i*3 + e.sensed_type] = e.sensed_proximity/e.max_range; // normalize to [0,1]
-        }
-      }
-      
-      // get action from brain
-      var actionix = this.brain.forward(input_array);
-      var action = this.actions[actionix];
-      this.actionix = actionix; //back this up
-      
-      // demultiplex into behavior variables
-      this.rot1 = action[0]*1;
-      this.rot2 = action[1]*1;
-      
-      //this.rot1 = 0;
-      //this.rot2 = 0;
-    }
-
-    backward() {
-      // in backward pass agent learns.
-      // compute reward 
-      var proximity_reward = 0.0;
-      var num_eyes = this.eyes.length;
-      for(var i=0;i<num_eyes;i++) {
-        var e = this.eyes[i];
-        // agents dont like to see walls, especially up close
-        proximity_reward += e.sensed_type === 0 ? e.sensed_proximity/e.max_range : 1.0;
-      }
-      proximity_reward = proximity_reward/num_eyes;
-      proximity_reward = Math.min(1.0, proximity_reward * 2);
-      
-      // agents like to go straight forward
-      var forward_reward = 0.0;
-      if(this.actionix === 0 && proximity_reward > 0.75) forward_reward = 0.1 * proximity_reward;
-      
-      // agents like to eat good things
-      var digestion_reward = this.digestion_signal;
-      this.digestion_signal = 0.0;
-      
-      var reward = proximity_reward + forward_reward + digestion_reward;
-      
-      // pass to brain for learning
-      this.brain.backward(reward);
-    }
-  }
-  /**
-   * This class describes an Eye
-   * Eye uses raycasting to get all the objects that it
-   * can see.
-   */
-  class Eye{
-    constructor(src, dst){
-      this._view = new THREE.Mesh(
-        new THREE.BoxBufferGeometry(1,1,10),
-        new THREE.MeshBasicMaterial({color: 0x111111})
-      );
-      this._view.geometry.computeBoundingBox();
-      this.raycaster = new THREE.Raycaster();
-      
-    }
-    get view(){
-      return this._view;
-    }
-    get boundingBox(){
-      this._view.geometry.computeBoundingBox();
-      return this._view.geometry.boundingBox;
-    }
-    /**
-     * This function return the nearest detected object.
-     * @param {THREE.Vector3} src from this point we will create ray
-     * @param {THREE.Mesh[]} targets array of intersection targets 
-     */
-    getNearistBounding(src, targets){
-      let dst = new THREE.Vector3();
-      dst.setFromMatrixPosition( this._view.matrixWorld );
-      this.raycaster.set(src, dst);
-      let intersects = raycaster.intersectObjects(targets);
-      if (intersects.length > 0){
-        return {obj: intersects[0].object, dist: intersects[0].distance}
-      }
-    }
-  }
-
     
     var line_point_intersect = function(p1,p2,p0,rad) {
       var v = new Vec(p2.y-p1.y,-(p2.x-p1.x)); // perpendicular vector
@@ -189,77 +56,98 @@
       }
       return false;
     }
-
-
-
-    class Wall {
-      constructor(p1, p2){
-        this._view = new THREE.Mesh(
-          new THREE.CubeBufferGeometry(),
-          new THREE.MeshBasicMaterial({color: 0xf2f2f2})
-        );
-        
-      }
-      get boundingBox(){
-        this._view.geometry.computeBoundingBox();
-        return this._view.geometry.boundingBox;
+    
+    // Wall is made up of two points
+    var Wall = function(p1, p2) {
+      this.p1 = p1;
+      this.p2 = p2;
+    }
+    
+    // World object contains many agents and walls and food and stuff
+    var util_add_box = function(lst, x, y, w, h) {
+      lst.push(new Wall(new Vec(x,y), new Vec(x+w,y)));
+      lst.push(new Wall(new Vec(x+w,y), new Vec(x+w,y+h)));
+      lst.push(new Wall(new Vec(x+w,y+h), new Vec(x,y+h)));
+      lst.push(new Wall(new Vec(x,y+h), new Vec(x,y)));
+    }
+    
+    // item is circle thing on the floor that agent can interact with (see or eat, etc)
+    var Item = function(x, y, type) {
+      this.p = new Vec(x, y); // position
+      this.type = type;
+      this.rad = 10; // default radius
+      this.age = 0;
+      this.cleanup_ = false;
+    }
+    
+    var World = function() {
+      this.agents = [];
+      this.W = canvas.width;
+      this.H = canvas.height;
+      
+      this.clock = 0;
+      
+      // set up walls in the world
+      this.walls = []; 
+      var pad = 10;
+      util_add_box(this.walls, pad, pad, this.W-pad*2, this.H-pad*2);
+      util_add_box(this.walls, 100, 100, 200, 300); // inner walls
+      this.walls.pop();
+      util_add_box(this.walls, 400, 100, 200, 300);
+      this.walls.pop();
+      
+      // set up food and poison
+      this.items = []
+      for(var k=0;k<30;k++) {
+        var x = convnetjs.randf(20, this.W-20);
+        var y = convnetjs.randf(20, this.H-20);
+        var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
+        var it = new Item(x, y, t);
+        this.items.push(it);
       }
     }
     
-    
-    var Item = THREE.Object3D;
-    Item.type = null;
-    Item.rad = 10; // default radius
-    Item.age = 0;
-    Item.cleanup_ = false;
-
-    class World  {
-      constructor(){
-        this.agents = [];
-        this.W = canvas.width;
-        this.H = canvas.height;
-        
-        this.clock = 0;
-        
-        // set up walls in the world
-        this.walls = []; 
-        var pad = 10;
-        // util_add_box(this.walls, pad, pad, this.W-pad*2, this.H-pad*2);
-        // util_add_box(this.walls, 100, 100, 200, 300); // inner walls
-        // this.walls.pop();
-        // util_add_box(this.walls, 400, 100, 200, 300);
-        // this.walls.pop();
-        
-
-        // set up food and poison
-        this.items = []
-        for(var k=0;k<30;k++) {
-          var x = convnetjs.randf(20, this.W-20);
-          var y = convnetjs.randf(20, this.H-20);
-          var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
-          if (t == 1){
-            var it = new Food(new THREE.Vector3(x, y, 0));
-          }
-          else{
-            var it = new Poison(new THREE.Vector3(x, y, 0));
-          }
-          this.items.push(it);
-        }
-      }   
+    World.prototype = {      
       // helper function to get closest colliding walls/items
-      stuff_collide_(eye, check_walls, check_items) {
+      stuff_collide_: function(p1, p2, check_walls, check_items) {
         var minres = false;
         
-        for(let wall of check_walls){
-          
+        // collide with walls
+        if(check_walls) {
+          for(var i=0,n=this.walls.length;i<n;i++) {
+            var wall = this.walls[i];
+            var res = line_intersect(p1, p2, wall.p1, wall.p2);
+            if(res) {
+              res.type = 0; // 0 is wall
+              if(!minres) { minres=res; }
+              else {
+                // check if its closer
+                if(res.ua < minres.ua) {
+                  // if yes replace it
+                  minres = res;
+                }
+              }
+            }
+          }
         }
-        for(let item of check_items){
-
+        
+        // collide with items
+        if(check_items) {
+          for(var i=0,n=this.items.length;i<n;i++) {
+            var it = this.items[i];
+            var res = line_point_intersect(p1, p2, it.p, it.rad);
+            if(res) {
+              res.type = it.type; // store type of item
+              if(!minres) { minres=res; }
+              else { if(res.ua < minres.ua) { minres = res; }
+              }
+            }
+          }
         }
         
         return minres;
-      }
-      tick() {
+      },
+      tick: function() {
         // tick the environment
         this.clock++;
         
@@ -271,6 +159,8 @@
           for(var ei=0,ne=a.eyes.length;ei<ne;ei++) {
             var e = a.eyes[ei];
             // we have a line from p to p->eyep
+            var eyep = new Vec(a.p.x + e.max_range * Math.sin(a.angle + e.angle),
+                               a.p.y + e.max_range * Math.cos(a.angle + e.angle));
             var res = this.stuff_collide_(a.p, eyep, true, true);
             if(res) {
               // eye collided with wall
@@ -295,7 +185,7 @@
           a.oangle = a.angle; // and angle
           
           // steer the agent according to outputs of wheel velocities
-          var v = new THREE.Vector3(0, a.rad / 2.0);
+          var v = new Vec(0, a.rad / 2.0);
           v = v.rotate(a.angle + Math.PI/2);
           var w1p = a.p.add(v); // positions of wheel 1 and 2
           var w2p = a.p.sub(v);
@@ -381,6 +271,106 @@
       }
     }
     
+    // Eye sensor has a maximum range and senses walls
+    var Eye = function(angle) {
+      this.angle = angle; // angle relative to agent its on
+      this.max_range = 85;
+      this.sensed_proximity = 85; // what the eye is seeing. will be set in world.tick()
+      this.sensed_type = -1; // what does the eye see?
+    }
+    
+    // A single agent
+    var Agent = function() {
+    
+      // positional information
+      this.p = new Vec(50, 50);
+      this.op = this.p; // old position
+      this.angle = 0; // direction facing
+      
+      this.actions = [];
+      this.actions.push([1,1]);
+      this.actions.push([0.8,1]);
+      this.actions.push([1,0.8]);
+      this.actions.push([0.5,0]);
+      this.actions.push([0,0.5]);
+      
+      // properties
+      this.rad = 10;
+      this.eyes = [];
+      for(var k=0;k<9;k++) { this.eyes.push(new Eye((k-3)*0.25)); }
+      
+      // braaain
+      //this.brain = new deepqlearn.Brain(this.eyes.length * 3, this.actions.length);
+      var spec = document.getElementById('qspec').value;
+      eval(spec);
+      this.brain = brain;
+      
+      this.reward_bonus = 0.0;
+      this.digestion_signal = 0.0;
+      
+      // outputs on world
+      this.rot1 = 0.0; // rotation speed of 1st wheel
+      this.rot2 = 0.0; // rotation speed of 2nd wheel
+      
+      this.prevactionix = -1;
+    }
+    Agent.prototype = {
+      forward: function() {
+        // in forward pass the agent simply behaves in the environment
+        // create input to brain
+        var num_eyes = this.eyes.length;
+        var input_array = new Array(num_eyes * 3);
+        for(var i=0;i<num_eyes;i++) {
+          var e = this.eyes[i];
+          input_array[i*3] = 1.0;
+          input_array[i*3+1] = 1.0;
+          input_array[i*3+2] = 1.0;
+          if(e.sensed_type !== -1) {
+            // sensed_type is 0 for wall, 1 for food and 2 for poison.
+            // lets do a 1-of-k encoding into the input array
+            input_array[i*3 + e.sensed_type] = e.sensed_proximity/e.max_range; // normalize to [0,1]
+          }
+        }
+        
+        // get action from brain
+        var actionix = this.brain.forward(input_array);
+        var action = this.actions[actionix];
+        this.actionix = actionix; //back this up
+        
+        // demultiplex into behavior variables
+        this.rot1 = action[0]*1;
+        this.rot2 = action[1]*1;
+        
+        //this.rot1 = 0;
+        //this.rot2 = 0;
+      },
+      backward: function() {
+        // in backward pass agent learns.
+        // compute reward 
+        var proximity_reward = 0.0;
+        var num_eyes = this.eyes.length;
+        for(var i=0;i<num_eyes;i++) {
+          var e = this.eyes[i];
+          // agents dont like to see walls, especially up close
+          proximity_reward += e.sensed_type === 0 ? e.sensed_proximity/e.max_range : 1.0;
+        }
+        proximity_reward = proximity_reward/num_eyes;
+        proximity_reward = Math.min(1.0, proximity_reward * 2);
+        
+        // agents like to go straight forward
+        var forward_reward = 0.0;
+        if(this.actionix === 0 && proximity_reward > 0.75) forward_reward = 0.1 * proximity_reward;
+        
+        // agents like to eat good things
+        var digestion_reward = this.digestion_signal;
+        this.digestion_signal = 0.0;
+        
+        var reward = proximity_reward + forward_reward + digestion_reward;
+        
+        // pass to brain for learning
+        this.brain.backward(reward);
+      }
+    }
     
     function draw_net() {
       if(simspeed <=1) {
@@ -449,10 +439,6 @@
       }
     }
     
-    function render(){
-      renderer.render();
-    }
-
     // Draw everything
     function draw() {  
       ctx.clearRect(0, 0, canvas.width, canvas.height);

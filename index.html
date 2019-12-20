@@ -72,7 +72,7 @@ class Program {
                 RotationSpeed: 30
 			});
 		} else {
-            this.ControlObject = new THREE.Object3D();
+            this.ControlObject = this.Object;
             // this.Camera.position.set(-1, 1.2, -0.35);
             this.Scene.add(this.ControlObject);
             this.ControlObject.add(this.Camera);
@@ -85,30 +85,31 @@ class Program {
 
         this.Clock = new THREE.Clock();
 
-        let loader = new THREE.ColladaLoader();
-        loader.load("./src/src/models/fox_run.dae", function (dae){
-            this.ControlObject.add(dae.scene);
-            dae.scene.rotation.z += Math.PI;
-            dae.scene.scale.set(0.5, 0.5, 0.5);
-            var animations = dae.animations;
-			var avatar = dae.scene;
-			dae.scene.children[1].material.color = new THREE.Color(0xFFFFFF);
-			dae.scene.children[1].material.needsUpdate = true;
+        // let loader = new THREE.ColladaLoader();
+        // loader.load("./src/src/models/fox_run.dae", function (dae){
+        //     this.ControlObject.add(dae.scene);
+        //     dae.scene.rotation.z += Math.PI;
+        //     dae.scene.scale.set(0.5, 0.5, 0.5);
+        //     var animations = dae.animations;
+		// 	var avatar = dae.scene;
+		// 	dae.scene.children[1].material.color = new THREE.Color(0xFFFFFF);
+		// 	dae.scene.children[1].material.needsUpdate = true;
             
 
-			this.Mixer = new THREE.AnimationMixer( avatar );
-			var action = this.Mixer.clipAction( animations[ 0 ] ).play();
-        }.bind(this));    
+		// 	this.Mixer = new THREE.AnimationMixer( avatar );
+		// 	var action = this.Mixer.clipAction( animations[ 0 ] ).play();
+        // }.bind(this));    
 
-        // let TextureLoader = new THREE.TextureLoader();
-        // TextureLoader.load("./src/src/models/forest/grass.png", function (tex) {
-        //     tex.wrapS = THREE.RepeatWrapping;
-        //     tex.wrapT = THREE.RepeatWrapping;
-        //     tex.repeat.set(100, 100);
-        //     let ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), new THREE.MeshBasicMaterial({map: tex}));
-        //     ground.rotation.x -= Math.PI/2;
-        //     this.Scene.add(ground);
-        // }.bind(this));
+        let TextureLoader = new THREE.TextureLoader();
+        TextureLoader.load("./src/src/models/forest/grass.png", function (tex) {
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(100, 100);
+            let ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), new THREE.MeshBasicMaterial({map: tex, side:THREE.DoubleSide}));
+            //ground.rotation.x -= Math.PI/2;
+            this.Scene.add(ground);
+            alert('ok')
+        }.bind(this));
 
 //         loader.load("./src/src/models/forest/forest1.dae", function (dae){
 //             let BloodwoodTree = dae.scene.getChildByName("BloodwoodTree");
@@ -198,7 +199,7 @@ class Program {
                 this.Mixer.update(delta);
             }
         
-        this.Controls.update(delta);
+        //this.Controls.update(delta);
     }
 };
 
