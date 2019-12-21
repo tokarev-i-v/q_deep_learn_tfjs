@@ -203,8 +203,11 @@
      * @param {THREE.Mesh[]} targets array of intersection targets
      * @returns {Object|null} 
      */
-    getNearestCollision(src, targets){
+    getNearestCollision(targets_objs){
       let dst = new THREE.Vector3();
+      let targets = targets_objs.map((el)=>{
+          return el.view;
+      });
       dst.setFromMatrixPosition( this._view.matrixWorld );
       this.raycaster.set(this.src_vector, dst);
       let intersects = this.raycaster.intersectObjects(targets);
@@ -275,11 +278,12 @@
         this.Container = document.createElement("div");
         this.Container.id = "MainContainer";
         this.Container.classList.add("Container");
-
+        
         this.Renderer = new THREE.WebGLRenderer();
         this.Renderer.setSize(window.innerWidth, window.innerHeight);
         this.Container.appendChild(this.Renderer.domElement);
-        document.body.appendChild(this.Container);
+
+        document.body.insertBefore( this.Container, document.body.firstChild);
 
         this.stats = new Stats();
         document.body.appendChild(this.stats.dom);
@@ -300,9 +304,9 @@
         this.AmbientLight = new THREE.AmbientLight(0xFFFFFF, 0.9);
         this.Scene.add(this.AmbientLight);
 
-        this.ControlObject = this.Object;
-        // this.Camera.position.set(-1, 1.2, -0.35);
-        this.Scene.add(this.ControlObject);
+        // this.ControlObject = this.Object;
+        // // this.Camera.position.set(-1, 1.2, -0.35);
+        // this.Scene.add(this.ControlObject);
         // this.ControlObject.add(this.Camera);
         this.Controls = new THREE.FlyControls(this.Camera, document.getElementById("MainContainer"));
         this.Controls.movementSpeed = 13;
@@ -341,7 +345,7 @@
         //     }
         
          w.agents[0].brain.visSelf(document.getElementById('brain_info_div'));
-        //this.Controls.update(delta);
+        this.Controls.update(delta);
     }
 
       // helper function to get closest colliding walls/items

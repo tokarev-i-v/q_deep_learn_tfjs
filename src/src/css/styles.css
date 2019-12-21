@@ -5,3 +5,8 @@ body{
 canvas { 
     display: block; /* fix necessary to remove space at bottom of canvas */ 
 }
+.Container{
+  height:1000px;
+  width:1000px;
+  position: absolute;
+}
