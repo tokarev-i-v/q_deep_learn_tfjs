@@ -242,9 +242,12 @@
     class World  {
       constructor(){
         this.agents = [];
-        this.W = canvas.width;
-        this.H = canvas.height;
-        
+        // this.W = canvas.width;
+        // this.H = canvas.height;
+
+        this.W = 2000;
+        this.H = 2000;
+
         this.clock = 0;
         
         // set up walls in the world
@@ -406,22 +409,21 @@
           var a = this.agents[i];
           a.op = a.position.clone(); // back up old position
           a.oangle = a.angle; // and angle
-          
           // steer the agent according to outputs of wheel velocities
           var v = new THREE.Vector3(0, a.rad / 2.0);
           var rotat = new THREE.Matrix4().makeRotationZ(a.angle + Math.PI/2);
           v = v.applyMatrix4(rotat);
-          var w1p = a.position.add(v); // positions of wheel 1 and 2
-          var w2p = a.position.sub(v);
-          var vv = a.position.sub(w2p);
+          var w1p = a.position.clone().add(v); // positions of wheel 1 and 2
+          var w2p =a.position.clone().sub(v);
+          var vv = a.position.clone().sub(w2p);
           rotat = new THREE.Matrix4().makeRotationZ(-a.rot1);
           vv = vv.applyMatrix4(rotat);
-          var vv2 = a.position.sub(w1p);
+          var vv2 = a.position.clone().sub(w1p);
           rotat = new THREE.Matrix4().makeRotationZ(a.rot2);
-          vv2 = vv2.applyMatrix4(rotat);
-          var np = w2p.add(vv);
+          vv2 = vv2.clone().applyMatrix4(rotat);
+          var np = w2p.clone().add(vv);
           np.multiplyScalar(0.5);
-          var np2 = w1p.add(vv2);
+          var np2 = w1p.clone().add(vv2);
           np2.multiplyScalar(0.5);
           a.position = np.add(np2);
           
@@ -440,7 +442,7 @@
           // handle boundary conditions
           if(a.position.x<0)a.position.x=0;
           if(a.position.x>this.W)a.position.x=this.W;
-          if(a.position.y<0)a.p.y=0;
+          if(a.position.y<0)a.position.y=0;
           if(a.position.y>this.H)a.position.y=this.H;
         }
         

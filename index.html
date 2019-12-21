@@ -1,210 +1,130 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf8" />
-        <title>SkyFox Forest Walking</title>
-        <link rel="stylesheet" type="text/css" href="src/src/css/styles.css" />
-        <link rel="stylesheet" type="text/css" href="src/src/css/MovingButtons.css" />
-        <script src="./src/src/js/three.min.js"></script>
-        <script src="src/src/js/stats.min.js"></script>
-        <script src="src/src/js/ColladaLoader.js"></script>
-        <script src="src/src/js/hammer.min.js"></script>
-        <script src="src/src/js/DeviceOrientationControls.js"></script>
-        <script src="src/src/js/FlyControls.js"></script>
-        <script src="src/src/js/ComputerMobileControls.js"></script>
-    </head>
-    <body>
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>ConvNetJS Deep Q Learning Reinforcement Learning with Neural Network demo</title>
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" type="text/css" href="src/src/css/styles.css" />
+  <link rel="stylesheet" type="text/css" href="src/src/css/MovingButtons.css" />
+  <link rel="stylesheet" href="./src/css/style.css">
+  <script src='./src/js/three.min.js'></script>
+  <script src="src/src/js/stats.min.js"></script>
+  <script src="src/src/js/ColladaLoader.js"></script>
+  <script src="src/src/js/FlyControls.js"></script>
+  <script src="./src/js/convnet.js"></script>
+  <script src="./src/js/util.js"></script>
+  <script src="./src/js/vis.js"></script>
+  <script src="./src/js/deepqlearn.js"></script>
+  
+  <script src="./src/js/rldemo.js"></script>
+  <style type="text/css">
+      canvas { border: 1px solid white; }
+    </style>
 
-<script>
-let DEVICE_TYPES = {
-    DESKTOP: 0,
-    MOBILE: 1
-};
-    
-class Program {
-    constructor(){
-        this.render = this.render.bind(this);
-        this.Container = document.createElement("div");
-        this.Container.id = "MainContainer";
-        this.Container.classList.add("Container");
+ </head>
+ <body onload="start();">
+   <div id="wrap">
+   <h2><a href="http://cs.stanford.edu/people/karpathy/convnetjs/">ConvNetJS</a> Deep Q Learning Demo</h2>
+   <h1>Description</h1>
+   <p>
+   This demo follows the description of the Deep Q Learning algorithm described in 
+   <a href="http://arxiv.org/pdf/1312.5602v1.pdf">Playing Atari with Deep Reinforcement Learning</a>, 
+   a paper from NIPS 2013 Deep Learning Workshop from DeepMind. The paper is a nice demo of a fairly
+   standard (model-free) Reinforcement Learning algorithm (Q Learning) learning to play Atari games.
+   </p>
+   <p>
+   In this demo, instead of Atari games, we'll start out with something more simple: 
+   a 2D agent that has 9 eyes pointing in different angles ahead and every eye senses 3 values
+   along its direction (up to a certain maximum visibility distance): distance to a wall, distance to 
+   a green thing, or distance to a red thing. The agent navigates by using one of 5 actions that turn 
+   it different angles. The red things are apples and the agent gets reward for eating them. The green
+   things are poison and the agent gets negative reward for eating them. The training takes a few tens
+   of minutes with current parameter settings.
+   </p>
+   <p>
+   Over time, the agent learns to avoid states that lead to states with low rewards, and picks actions
+   that lead to better states instead.
+   </p>
+   <h1>Q-Learner full specification and options</h1>
+   <p>
+   The textfield below gets eval()'d to produce the Q-learner for this demo. This allows you to fiddle with 
+   various parameters and settings and also shows how you can use the API for your own purposes. 
+   All of these settings are optional but are listed to give an idea of possibilities.
+   Feel free to change things around and hit reload! Documentation for all
+   options is the paper linked to above, and there are also 
+   comments for every option in the source code javascript file.
+   </p>
+   <textarea id="qspec" style="width:100%; height:200px;">
+var num_inputs = 27; // 9 eyes, each sees 3 numbers (wall, green, red thing proximity)
+var num_actions = 5; // 5 possible angles agent can turn
+var temporal_window = 1; // amount of temporal memory. 0 = agent lives in-the-moment :)
+var network_size = num_inputs*temporal_window + num_actions*temporal_window + num_inputs;
 
-        this.Renderer = new THREE.WebGLRenderer();
-        this.Renderer.setSize(window.innerWidth, window.innerHeight);
-        this.Container.appendChild(this.Renderer.domElement);
-        document.body.appendChild(this.Container);
+// the value function network computes a value of taking any of the possible actions
+// given an input state. Here we specify one explicitly the hard way
+// but user could also equivalently instead use opt.hidden_layer_sizes = [20,20]
+// to just insert simple relu hidden layers.
+var layer_defs = [];
+layer_defs.push({type:'input', out_sx:1, out_sy:1, out_depth:network_size});
+layer_defs.push({type:'fc', num_neurons: 50, activation:'relu'});
+layer_defs.push({type:'fc', num_neurons: 50, activation:'relu'});
+layer_defs.push({type:'regression', num_neurons:num_actions});
 
-        this.stats = new Stats();
-        document.body.appendChild(this.stats.dom);
-        
-        this.Camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 10000);
-        this.Camera.position.set(0,0, 10);
-        this.Scene = new THREE.Scene();
-        this.Scene.background = new THREE.Color( 0xaaccff );
-        this.Scene.fog = new THREE.FogExp2( 0xaaccff, 0.007 );
-        //        this.Scene.add(this.Camera);
+// options for the Temporal Difference learner that trains the above net
+// by backpropping the temporal difference learning rule.
+var tdtrainer_options = {learning_rate:0.001, momentum:0.0, batch_size:64, l2_decay:0.01};
 
-        this.Loader = new THREE.ColladaLoader();
-//        this.Loader.load("./src/scenes/telefermer.dae", function (dae) {
-//            dae.scene.scale.set(10,10,10);
-//            this.Scene.add(dae.scene);
-//        }.bind(this));
+var opt = {};
+opt.temporal_window = temporal_window;
+opt.experience_size = 30000;
+opt.start_learn_threshold = 1000;
+opt.gamma = 0.7;
+opt.learning_steps_total = 200000;
+opt.learning_steps_burnin = 3000;
+opt.epsilon_min = 0.05;
+opt.epsilon_test_time = 0.05;
+opt.layer_defs = layer_defs;
+opt.tdtrainer_options = tdtrainer_options;
 
-        this.AmbientLight = new THREE.AmbientLight(0xFFFFFF, 0.9);
-        this.Scene.add(this.AmbientLight);
+var brain = new deepqlearn.Brain(num_inputs, num_actions, opt); // woohoo
+   </textarea>
+   <button onclick="reload()" style="width: 200px; height: 30px; margin-top: 5px;">Reload</button>
+   
+   <h1>State Visualizations</h1>
+   
+   <div><b>Left</b>: Current input state (quite a useless thing to look at). <b>Right</b>: Average reward over time (this should go up as agent becomes better on average at collecting rewards)</div>
+   <canvas id="vis_canvas" width="350" height="150"></canvas>
+   <canvas id="graph_canvas" width="350" height="150"></canvas><br />
+   <canvas id="net_canvas" width="700" height="200"></canvas><br />
 
-        var testExp = new RegExp('Android|webOS|iPhone|iPad|' +
-                                    'BlackBerry|Windows Phone|'  +
-                                    'Opera Mini|IEMobile|Mobile' , 
-                                'i');
-
-        if (testExp.test(navigator.userAgent)){
-            this.DeviceType = DEVICE_TYPES.MOBILE;
-        }else{
-            this.DeviceType = DEVICE_TYPES.DESKTOP;
-        }
-
-
-        if(this.DeviceType === DEVICE_TYPES.MOBILE)
-		{
-			this.Controls = new THREEx.ComputerMobileControls({
-                Camera: this.Camera,
-                MovingSpeed: 10,
-                RotationSpeed: 30
-			});
-		} else {
-            this.ControlObject = this.Object;
-            // this.Camera.position.set(-1, 1.2, -0.35);
-            this.Scene.add(this.ControlObject);
-            this.ControlObject.add(this.Camera);
-            this.Controls = new THREE.FlyControls(this.Camera, document.getElementById("MainContainer"));
-			this.Controls.movementSpeed = 13;
-			this.Controls.rollSpeed = Math.PI / 8;
-			this.Controls.autoForward = false;
-			this.Controls.dragToLook = false;
-		}
-
-        this.Clock = new THREE.Clock();
-
-        // let loader = new THREE.ColladaLoader();
-        // loader.load("./src/src/models/fox_run.dae", function (dae){
-        //     this.ControlObject.add(dae.scene);
-        //     dae.scene.rotation.z += Math.PI;
-        //     dae.scene.scale.set(0.5, 0.5, 0.5);
-        //     var animations = dae.animations;
-		// 	var avatar = dae.scene;
-		// 	dae.scene.children[1].material.color = new THREE.Color(0xFFFFFF);
-		// 	dae.scene.children[1].material.needsUpdate = true;
-            
-
-		// 	this.Mixer = new THREE.AnimationMixer( avatar );
-		// 	var action = this.Mixer.clipAction( animations[ 0 ] ).play();
-        // }.bind(this));    
-
-        let TextureLoader = new THREE.TextureLoader();
-        TextureLoader.load("./src/src/models/forest/grass.png", function (tex) {
-            tex.wrapS = THREE.RepeatWrapping;
-            tex.wrapT = THREE.RepeatWrapping;
-            tex.repeat.set(100, 100);
-            let ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), new THREE.MeshBasicMaterial({map: tex, side:THREE.DoubleSide}));
-            //ground.rotation.x -= Math.PI/2;
-            this.Scene.add(ground);
-            alert('ok')
-        }.bind(this));
-
-//         loader.load("./src/src/models/forest/forest1.dae", function (dae){
-//             let BloodwoodTree = dae.scene.getChildByName("BloodwoodTree");
-//             let Grass = dae.scene.getChildByName("Grass");
-//             let Hedgehog = dae.scene.getChildByName("Hedgehog");
-//             let Mushrooms = dae.scene.getChildByName("Mushrooms");
-//             let PineTree = dae.scene.getChildByName("PineTree");
-//             let Rabbit = dae.scene.getChildByName("Rabbit");
-//             let SycamoreTree = dae.scene.getChildByName("SycamoreTree");
-
-// //            Grass.scale.set(0.1,0.1,0.1);
-// //            Mushrooms.scale.set(0.001, 0.001, 0.001);
-// //            Rabbit.scale.set(4,4,4);
-
-// //            dae.scene.rotation.z+= Math.PI;
-            
-//             let obj_arr = [BloodwoodTree, SycamoreTree, Grass, Hedgehog, Mushrooms, PineTree, Rabbit];
-//             this.WIDTH_SIZE = 1000; this.HEIGHT_SIZE = 1000;
-//             for(let i = 0; i < obj_arr.length; i++)
-//             {
-//                 obj_arr[i].rotation.x -= Math.PI/2;          
-//                 if(obj_arr[i].name === "Grass")
-//                 {
-//                     this.copyObjectOnScene(obj_arr[i], 4000, 0.1, true);
-//                 }
-//                 if(obj_arr[i].name === "Mushrooms")
-//                 {
-//                     this.copyObjectOnScene(obj_arr[i], 20, 0.001);
-//                 }
-//                 if(obj_arr[i].name === "Hedgehog")
-//                 {
-//                     this.copyObjectOnScene(obj_arr[i], 20, 0.01);
-//                 }
-//                 if(obj_arr[i].name === "BloodwoodTree")
-//                 {
-//                     this.copyObjectOnScene(obj_arr[i], 500, 1);
-//                 }
-//                 if(obj_arr[i].name === "PineTree")
-//                 {
-//                     this.copyObjectOnScene(obj_arr[i], 500, 1);
-//                 }
-//                 if(obj_arr[i].name === "SycamoreTree")
-//                 {
-//                     this.copyObjectOnScene(obj_arr[i], 100, 1);
-//                 }
-//                 if(obj_arr[i].name === "Rabbit")
-//                 {
-//                     this.copyObjectOnScene(obj_arr[i], 100, 100);
-//                 }
-//             }
-//         }.bind(this));
-
-
-        this.render();
-
-    }
-
-    copyObjectOnScene(obj,count, scale, rand){
-        for(let j = 0; j < count; j++){
-            let mesh = obj.clone();
-            //let mesh = new THREE.Mesh(obj.geometry, obj.material);
-            if(rand){
-                let sc = Math.random();
-                mesh.scale.set(scale*sc+(0.2*scale), scale*sc+(0.2*scale), scale*sc+(0.2*scale));
-            
-            }
-            else
-                mesh.scale.set(scale, scale, scale);
-            mesh.position.set(Math.random()*this.WIDTH_SIZE-(this.WIDTH_SIZE/2), 0, Math.random()*this.HEIGHT_SIZE-(this.HEIGHT_SIZE/2));
-            this.Scene.add(mesh);
-        }
-    }
-
-    render () {
-        requestAnimationFrame(this.render);
-        this.stats.update();
-        this.ControlObject.position.y = 0;
-        
-        this.Renderer.render(this.Scene, this.Camera);
-        var delta = this.Clock.getDelta();
-        // if(this.Controls.moveState.forward || this.Controls.moveState.back){
-        //     if (this.Mixer !== undefined ) {
-        //         this.Mixer.update(delta);
-        //     }
-        // }
-        if (this.Mixer !== undefined ) {
-                this.Mixer.update(delta);
-            }
-        
-        //this.Controls.update(delta);
-    }
-};
-
-let Prog = new Program();
-</script>    
-
-    </body>
+   <div style="font-size:13px;">
+   (Takes ~10 minutes to train with current settings. If you're impatient, scroll down and load an example pre-trained network from pre-filled JSON)
+   </div>
+   <canvas id="canvas" width="700" height="500"></canvas>
+   <div id="brain_info_div"></div>
+   
+   <h1>Controls</h1>
+   <button onclick="goveryfast()">Go very fast</button>
+   <button onclick="gofast()">Go fast</button>
+   <button onclick="gonormal()">Go normal speed</button>
+   <button onclick="goslow()">Go slow</button><br />
+   <button onclick="startlearn()">Start Learning</button>
+   <button onclick="stoplearn()">Stop Learning</button>
+   
+   <h1>I/O</h1>
+   <p>
+   You can save and load a network from JSON here. Note that the textfield is prefilled with a
+   pretrained network that works reasonable well, if you're impatient to let yours train enough.
+   Just hit the load button!
+   </p>
+   <button onclick="savenet()">Save network to JSON</button>
+   <button onclick="loadnet()">Load network from JSON</button>
+ 
+   <br />
+   
+   </div>
+ </body>
 </html>
