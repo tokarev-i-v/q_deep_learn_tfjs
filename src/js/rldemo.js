@@ -15,6 +15,12 @@
     get view(){
       return this._view;
     }
+    get position(){
+      return this._view.position;
+    }
+    set position(vec){
+      this._view.position.copy(vec);
+    }
   }
   class Poison {
     constructor(){
@@ -25,6 +31,12 @@
     }
     get view(){
       return this._view;
+    }
+    get position(){
+      return this._view.position;
+    }
+    set position(vec){
+      this._view.position.copy(vec);
     }
   }
 
@@ -142,6 +154,9 @@
     get position(){
       return this._view.position;
     }
+    set position(vec){
+      this._view.position.copy(vec);
+    }
     get angle(){
       return this._view.rotation.z;
     }
@@ -253,6 +268,7 @@
           }
           this.items.push(it);
         }
+        this.init();
       }   
 
       init(json_params){
@@ -287,7 +303,7 @@
         this.ControlObject = this.Object;
         // this.Camera.position.set(-1, 1.2, -0.35);
         this.Scene.add(this.ControlObject);
-        this.ControlObject.add(this.Camera);
+        // this.ControlObject.add(this.Camera);
         this.Controls = new THREE.FlyControls(this.Camera, document.getElementById("MainContainer"));
         this.Controls.movementSpeed = 13;
         this.Controls.rollSpeed = Math.PI / 8;
@@ -309,9 +325,9 @@
       }
 
       render () {
-        requestAnimationFrame(this.render);
+        //requestAnimationFrame(this.render);
         this.stats.update();
-        this.ControlObject.position.y = 0;
+        // this.ControlObject.position.y = 0;
         
         this.Renderer.render(this.Scene, this.Camera);
         var delta = this.Clock.getDelta();
@@ -320,10 +336,11 @@
         //         this.Mixer.update(delta);
         //     }
         // }
-        if (this.Mixer !== undefined ) {
-                this.Mixer.update(delta);
-            }
+        // if (this.Mixer !== undefined ) {
+        //         this.Mixer.update(delta);
+        //     }
         
+         w.agents[0].brain.visSelf(document.getElementById('brain_info_div'));
         //this.Controls.update(delta);
     }
 
@@ -380,18 +397,21 @@
         // apply outputs of agents on evironment
         for(var i=0,n=this.agents.length;i<n;i++) {
           var a = this.agents[i];
-          a.op = a.position; // back up old position
+          a.op = a.position.clone(); // back up old position
           a.oangle = a.angle; // and angle
           
           // steer the agent according to outputs of wheel velocities
           var v = new THREE.Vector3(0, a.rad / 2.0);
-          v = v.rotateZ(a.angle + Math.PI/2);
+          var rotat = new THREE.Matrix4().makeRotationZ(a.angle + Math.PI/2);
+          v = v.applyMatrix4(rotat);
           var w1p = a.position.add(v); // positions of wheel 1 and 2
           var w2p = a.position.sub(v);
           var vv = a.position.sub(w2p);
-          vv = vv.rotateZ(-a.rot1);
+          rotat = new THREE.Matrix4().makeRotationZ(-a.rot1);
+          vv = vv.applyMatrix4(rotat);
           var vv2 = a.position.sub(w1p);
-          vv2 = vv2.rotateZ(a.rot2);
+          rotat = new THREE.Matrix4().makeRotationZ(a.rot2);
+          vv2 = vv2.applyMatrix4(rotat);
           var np = w2p.add(vv);
           np.multiplyScalar(0.5);
           var np2 = w1p.add(vv2);
@@ -404,17 +424,17 @@
           if(a.angle>2*Math.PI)a.angle-=2*Math.PI;
           
           // agent is trying to move from p to op. Check walls
-          var res = this.stuff_collide_(a.op, a.p, true, false);
+          var res = this.stuff_collide_(a.frontEye, true, false);
           if(res) {
             // wall collision! reset position
-            a.p = a.op;
+            a.position = a.op;
           }
           
           // handle boundary conditions
-          if(a.p.x<0)a.p.x=0;
-          if(a.p.x>this.W)a.p.x=this.W;
-          if(a.p.y<0)a.p.y=0;
-          if(a.p.y>this.H)a.p.y=this.H;
+          if(a.position.x<0)a.position.x=0;
+          if(a.position.x>this.W)a.position.x=this.W;
+          if(a.position.y<0)a.p.y=0;
+          if(a.position.y>this.H)a.position.y=this.H;
         }
         
         // tick all items
@@ -426,11 +446,11 @@
           // see if some agent gets lunch
           for(var j=0,m=this.agents.length;j<m;j++) {
             var a = this.agents[j];
-            var d = a.p.dist_from(it.p);
+            var d = a.position.distanceTo(it.position);
             if(d < it.rad + a.rad) {
               
               // wait lets just make sure that this isn't through a wall
-              var rescheck = this.stuff_collide_(a.p, it.p, true, false);
+              var rescheck = this.stuff_collide_(a.frontEye, true, false);
               if(!rescheck) { 
                 // ding! nom nom nom
                 if(it.type === 1) a.digestion_signal += 5.0; // mmm delicious apple
@@ -537,79 +557,12 @@
         reward_graph.drawSelf(gcanvas);
       }
     }
-    
-    function render(){
-      renderer.render();
-    }
 
-    // Draw everything
-    function draw() {  
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.lineWidth = 1;
-      var agents = w.agents;
-      
-      // draw walls in environment
-      ctx.strokeStyle = "rgb(0,0,0)";
-      ctx.beginPath();
-      for(var i=0,n=w.walls.length;i<n;i++) {
-        var q = w.walls[i];
-        ctx.moveTo(q.p1.x, q.p1.y);
-        ctx.lineTo(q.p2.x, q.p2.y);
-      }
-      ctx.stroke();
-  
-      // draw agents
-      // color agent based on reward it is experiencing at the moment
-      var r = Math.floor(agents[0].brain.latest_reward * 200);
-      if(r>255)r=255;if(r<0)r=0;
-      ctx.fillStyle = "rgb(" + r + ", 150, 150)";
-      ctx.strokeStyle = "rgb(0,0,0)";
-      for(var i=0,n=agents.length;i<n;i++) {
-        var a = agents[i];
-        
-        // draw agents body
-        ctx.beginPath();
-        ctx.arc(a.op.x, a.op.y, a.rad, 0, Math.PI*2, true); 
-        ctx.fill();
-        ctx.stroke();
-        
-        // draw agents sight
-        for(var ei=0,ne=a.eyes.length;ei<ne;ei++) {
-          var e = a.eyes[ei];
-          var sr = e.sensed_proximity;
-          if(e.sensed_type === -1 || e.sensed_type === 0) { 
-            ctx.strokeStyle = "rgb(0,0,0)"; // wall or nothing
-          }
-          if(e.sensed_type === 1) { ctx.strokeStyle = "rgb(255,150,150)"; } // apples
-          if(e.sensed_type === 2) { ctx.strokeStyle = "rgb(150,255,150)"; } // poison
-          ctx.beginPath();
-          ctx.moveTo(a.op.x, a.op.y);
-          ctx.lineTo(a.op.x + sr * Math.sin(a.oangle + e.angle),
-                     a.op.y + sr * Math.cos(a.oangle + e.angle));
-          ctx.stroke();
-        }
-      }
-      
-      // draw items
-      ctx.strokeStyle = "rgb(0,0,0)";
-      for(var i=0,n=w.items.length;i<n;i++) {
-        var it = w.items[i];
-        if(it.type === 1) ctx.fillStyle = "rgb(255, 150, 150)";
-        if(it.type === 2) ctx.fillStyle = "rgb(150, 255, 150)";
-        ctx.beginPath();
-        ctx.arc(it.p.x, it.p.y, it.rad, 0, Math.PI*2, true); 
-        ctx.fill();
-        ctx.stroke();
-      }
-      
-      w.agents[0].brain.visSelf(document.getElementById('brain_info_div'));
-    }
-    
     // Tick the world
     function tick() {
       w.tick();
       if(!skipdraw || w.clock % 50 === 0) {
-        draw();
+        w.render();
         draw_stats();
         draw_net();
       }
