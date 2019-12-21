@@ -272,6 +272,9 @@
           this.items.push(it);
         }
         this.init();
+        let agent = new Agent();
+        this.Scene.add(agent.view);
+        this.agents.push(agent);
       }   
 
       init(json_params){
@@ -633,7 +636,6 @@
       ctx = canvas.getContext("2d");
       
       w = new World();
-      w.agents = [new Agent()];
       
       gofast();
     }
