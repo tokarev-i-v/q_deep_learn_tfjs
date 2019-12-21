@@ -6,37 +6,35 @@
         new THREE.SphereBufferGeometry(1,1,1),
         new THREE.MeshBasicMaterial({color: 0x111111})
       )
-      
+      this.type = 1;
     }
     get boundingBox(){
       this._view.geometry.computeBoundingBox();
       return this.view.geometry.boundingBox;
     }
+    get view(){
+      return this._view;
+    }
   }
   class Poison {
     constructor(){
-      this.view = new THREE.Mesh(
+      this._view = new THREE.Mesh(
         new THREE.SphereBufferGeometry(1,1,1),
         new THREE.MeshBasicMaterial({color: 0x111111})
       )
+    }
+    get view(){
+      return this._view;
     }
   }
 
   class Agent{
     constructor(){
-      this.view = new THREE.Mesh(
-        new THREE.BoxBufferGeometry(1,1,1),
+      this.rad = 1;
+      this._view = new THREE.Mesh(
+        new THREE.BoxBufferGeometry(this.rad,this.rad,this.rad),
         new THREE.MeshBasicMaterial({color: 0x111111})
       );
-      this.eye = new Eye();
-      this.view.add(this.eye.view);
-      
-      
-   
-      // positional information
-      this.p = new THREE.Vector3(50, 50, 0);
-      this.op = this.p; // old position
-      this.angle = 0; // direction facing
       
       this.actions = [];
       this.actions.push([1,1]);
@@ -46,10 +44,24 @@
       this.actions.push([0,0.5]);
       
       // properties
-      this.rad = 10;
       this.eyes = [];
-      for(var k=0;k<9;k++) { this.eyes.push(new Eye((k-3)*0.25)); }
-      
+      /**star */
+      let r = 20;
+      let alpha = 0;
+      /**Now we create agent's eyes*/
+      for (let i = 0; i < 10; i++){
+          let eye = new Eye(this.view.position, alpha, r);
+          let mesh = eye.view;
+          this.view.add(mesh);
+          this.eyes.push(eye);
+          alpha += r;
+      }
+      this._frontEye = null;
+      if(this.eyes.length % 2 === 0){
+        this._frontEye = this.eyes[Math.round(this.eyes.length/2)];
+      }else {
+        this._frontEye = this.eyes[Math.round(this.eyes.length/2)-1];
+      }
       // braaain
       this.brain = new deepqlearn.Brain(this.eyes.length * 3, this.actions.length);
       var spec = document.getElementById('qspec').value;
@@ -58,7 +70,6 @@
       
       this.reward_bonus = 0.0;
       this.digestion_signal = 0.0;
-      
       // outputs on world
       this.rot1 = 0.0; // rotation speed of 1st wheel
       this.rot2 = 0.0; // rotation speed of 2nd wheel
@@ -66,13 +77,7 @@
       this.prevactionix = -1;
 
     }
-    intersects(obj){
-      if(this.boundingBox.intersects(obj.boundingBox)){
-        return true;
-      } else{
-        return false;
-      }
-    }
+    
 
     forward() {
       // in forward pass the agent simply behaves in the environment
@@ -130,75 +135,79 @@
       // pass to brain for learning
       this.brain.backward(reward);
     }
+
+    get view(){
+      return this._view;
+    }
+    get position(){
+      return this._view.position;
+    }
+    get angle(){
+      return this._view.rotation.z;
+    }
+    set angle(val){
+      this._view.rotation.z = val;
+    }
+    get frontEye(){
+      return this._frontEye;
+    }
   }
   /**
-   * This class describes an Eye
-   * Eye uses raycasting to get all the objects that it
-   * can see.
+   * @class Eye
+   * It presents as agent's eye detector.
    */
   class Eye{
-    constructor(src, dst){
+    /**
+     * 
+     * @param {THREE.Vector3} agent_pos_vec Vector that would use as src
+     * vector for raycastring
+     * @param {Number} alpha angle 
+     * @param {Number} r radius
+     */
+    constructor(agent_pos_vec, alpha, r){
       this._view = new THREE.Mesh(
         new THREE.BoxBufferGeometry(1,1,10),
         new THREE.MeshBasicMaterial({color: 0x111111})
       );
+      /**setting Eye position and rotation */
+      this._view.position.x = Math.sin(Math.PI*alpha/180)*r;
+      this._view.position.y = Math.cos(Math.PI*alpha/180)*r;
+      this._view.rotation.z = Math.PI*(180-alpha)/180;
       this._view.geometry.computeBoundingBox();
       this.raycaster = new THREE.Raycaster();
-      
+      this.max_range = 85;
+      this.sensed_proximity = 85; // what the eye is seeing. will be set in world.tick()
+      this.src_vector = agent_pos_vec;
     }
     get view(){
       return this._view;
     }
-    get boundingBox(){
-      this._view.geometry.computeBoundingBox();
-      return this._view.geometry.boundingBox;
-    }
     /**
      * This function return the nearest detected object.
      * @param {THREE.Vector3} src from this point we will create ray
-     * @param {THREE.Mesh[]} targets array of intersection targets 
+     * @param {THREE.Mesh[]} targets array of intersection targets
+     * @returns {Object|null} 
      */
-    getNearistBounding(src, targets){
+    getNearestCollision(src, targets){
       let dst = new THREE.Vector3();
       dst.setFromMatrixPosition( this._view.matrixWorld );
-      this.raycaster.set(src, dst);
-      let intersects = raycaster.intersectObjects(targets);
+      this.raycaster.set(this.src_vector, dst);
+      let intersects = this.raycaster.intersectObjects(targets);
       if (intersects.length > 0){
         return {obj: intersects[0].object, dist: intersects[0].distance}
+      } else {
+        return null;
       }
     }
   }
-
     
-    var line_point_intersect = function(p1,p2,p0,rad) {
-      var v = new Vec(p2.y-p1.y,-(p2.x-p1.x)); // perpendicular vector
-      var d = Math.abs((p2.x-p1.x)*(p1.y-p0.y)-(p1.x-p0.x)*(p2.y-p1.y));
-      d = d / v.length();
-      if(d > rad) { return false; }
-      
-      v.normalize();
-      v.scale(d);
-      var up = p0.add(v);
-      if(Math.abs(p2.x-p1.x)>Math.abs(p2.y-p1.y)) {
-        var ua = (up.x - p1.x) / (p2.x - p1.x);
-      } else {
-        var ua = (up.y - p1.y) / (p2.y - p1.y);
-      }
-      if(ua>0.0&&ua<1.0) {
-        return {ua:ua, up:up};
-      }
-      return false;
-    }
-
-
-
     class Wall {
       constructor(p1, p2){
         this._view = new THREE.Mesh(
           new THREE.CubeBufferGeometry(),
           new THREE.MeshBasicMaterial({color: 0xf2f2f2})
         );
-        
+        this.type = 0;
       }
       get boundingBox(){
         this._view.geometry.computeBoundingBox();
@@ -208,11 +217,10 @@
     
     
     var Item = THREE.Object3D;
-    Item.type = null;
-    Item.rad = 10; // default radius
-    Item.age = 0;
-    Item.cleanup_ = false;
-
+    /**
+     * @class
+     * World Contains all features.
+     */
     class World  {
       constructor(){
         this.agents = [];
@@ -246,17 +254,98 @@
           this.items.push(it);
         }
       }   
+
+      init(json_params){
+        this.Container = document.createElement("div");
+        this.Container.id = "MainContainer";
+        this.Container.classList.add("Container");
+
+        this.Renderer = new THREE.WebGLRenderer();
+        this.Renderer.setSize(window.innerWidth, window.innerHeight);
+        this.Container.appendChild(this.Renderer.domElement);
+        document.body.appendChild(this.Container);
+
+        this.stats = new Stats();
+        document.body.appendChild(this.stats.dom);
+
+        this.Camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 10000);
+        this.Camera.position.set(0,0, 10);
+        this.Scene = new THREE.Scene();
+        this.Scene.background = new THREE.Color( 0xaaccff );
+        this.Scene.fog = new THREE.FogExp2( 0xaaccff, 0.007 );
+        //        this.Scene.add(this.Camera);
+
+        this.Loader = new THREE.ColladaLoader();
+//        this.Loader.load("./src/scenes/telefermer.dae", function (dae) {
+//            dae.scene.scale.set(10,10,10);
+//            this.Scene.add(dae.scene);
+//        }.bind(this));
+
+        this.AmbientLight = new THREE.AmbientLight(0xFFFFFF, 0.9);
+        this.Scene.add(this.AmbientLight);
+
+        this.ControlObject = this.Object;
+        // this.Camera.position.set(-1, 1.2, -0.35);
+        this.Scene.add(this.ControlObject);
+        this.ControlObject.add(this.Camera);
+        this.Controls = new THREE.FlyControls(this.Camera, document.getElementById("MainContainer"));
+        this.Controls.movementSpeed = 13;
+        this.Controls.rollSpeed = Math.PI / 8;
+        this.Controls.autoForward = false;
+        this.Controls.dragToLook = false;
+        
+        this.Clock = new THREE.Clock();
+
+        let TextureLoader = new THREE.TextureLoader();
+        TextureLoader.load("./src/src/models/forest/grass.png", function (tex) {
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(100, 100);
+            let ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), new THREE.MeshBasicMaterial({map: tex, side:THREE.DoubleSide}));
+            //ground.rotation.x -= Math.PI/2;
+            this.Scene.add(ground);
+            alert('ok')
+        }.bind(this));
+      }
+
+      render () {
+        requestAnimationFrame(this.render);
+        this.stats.update();
+        this.ControlObject.position.y = 0;
+        
+        this.Renderer.render(this.Scene, this.Camera);
+        var delta = this.Clock.getDelta();
+        // if(this.Controls.moveState.forward || this.Controls.moveState.back){
+        //     if (this.Mixer !== undefined ) {
+        //         this.Mixer.update(delta);
+        //     }
+        // }
+        if (this.Mixer !== undefined ) {
+                this.Mixer.update(delta);
+            }
+        
+        //this.Controls.update(delta);
+    }
+
       // helper function to get closest colliding walls/items
       stuff_collide_(eye, check_walls, check_items) {
         var minres = false;
-        
-        for(let wall of check_walls){
-          
-        }
-        for(let item of check_items){
 
+        if(check_walls) {
+            let res = eye.getNearestCollision(this.walls);
+            if(res) {
+              res.type = 0; // 0 is wall
+              if(!minres) { minres=res; }
+            }
         }
-        
+        // collide with items
+        if(check_items) {
+          let res = eye.getNearestCollision(this.items);
+          if(res) {
+            res.type = it.type; // store type of item
+            if(!minres) { minres=res; }
+          }
+        }
         return minres;
       }
       tick() {
@@ -271,10 +360,10 @@
           for(var ei=0,ne=a.eyes.length;ei<ne;ei++) {
             var e = a.eyes[ei];
             // we have a line from p to p->eyep
-            var res = this.stuff_collide_(a.p, eyep, true, true);
+            var res = this.stuff_collide_(e, true, true);
             if(res) {
               // eye collided with wall
-              e.sensed_proximity = res.up.dist_from(a.p);
+              e.sensed_proximity = res.dist;
               e.sensed_type = res.type;
             } else {
               e.sensed_proximity = e.max_range;
@@ -291,23 +380,23 @@
         // apply outputs of agents on evironment
         for(var i=0,n=this.agents.length;i<n;i++) {
           var a = this.agents[i];
-          a.op = a.p; // back up old position
+          a.op = a.position; // back up old position
           a.oangle = a.angle; // and angle
           
           // steer the agent according to outputs of wheel velocities
           var v = new THREE.Vector3(0, a.rad / 2.0);
-          v = v.rotate(a.angle + Math.PI/2);
-          var w1p = a.p.add(v); // positions of wheel 1 and 2
-          var w2p = a.p.sub(v);
-          var vv = a.p.sub(w2p);
-          vv = vv.rotate(-a.rot1);
-          var vv2 = a.p.sub(w1p);
-          vv2 = vv2.rotate(a.rot2);
+          v = v.rotateZ(a.angle + Math.PI/2);
+          var w1p = a.position.add(v); // positions of wheel 1 and 2
+          var w2p = a.position.sub(v);
+          var vv = a.position.sub(w2p);
+          vv = vv.rotateZ(-a.rot1);
+          var vv2 = a.position.sub(w1p);
+          vv2 = vv2.rotateZ(a.rot2);
           var np = w2p.add(vv);
-          np.scale(0.5);
+          np.multiplyScalar(0.5);
           var np2 = w1p.add(vv2);
-          np2.scale(0.5);
-          a.p = np.add(np2);
+          np2.multiplyScalar(0.5);
+          a.position = np.add(np2);
           
           a.angle -= a.rot1;
           if(a.angle<0)a.angle+=2*Math.PI;
@@ -581,6 +670,7 @@
     var w; // global world object
     var current_interval_id;
     var skipdraw = false;
+
     function start() {
       canvas = document.getElementById("canvas");
       ctx = canvas.getContext("2d");
