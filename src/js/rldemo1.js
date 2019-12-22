@@ -236,8 +236,7 @@
                 // ding! nom nom nom
                 if(it.type === 1) a.digestion_signal += 5.0; // mmm delicious apple
                 if(it.type === 2) a.digestion_signal += -6.0; // ewww poison
-                it.cleanup_ = true;
-                update_items = true;
+                this.removeItem(it);
                 break; // break out of loop, item was consumed
               }
             }
@@ -247,14 +246,6 @@
             it.cleanup_ = true; // replace this one, has been around too long
             update_items = true;
           }
-        }
-        if(update_items) {
-          var nt = [];
-          for(var i=0,n=this.items.length;i<n;i++) {
-            var it = this.items[i];
-            if(!it.cleanup_) nt.push(it);
-          }
-          this.items = nt; // swap
         }
         if(this.items.length < 30 && this.clock % 10 === 0 && convnetjs.randf(0,1)<0.25) {
           var newitx = convnetjs.randf(20, this.W-20);

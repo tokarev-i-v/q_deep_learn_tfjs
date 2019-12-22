@@ -2,13 +2,17 @@
     
   class Food {
     constructor(pos){
+      this.rad = 1;
       this._view = new THREE.Mesh(
-        new THREE.SphereBufferGeometry(1,1,1),
+        new THREE.SphereBufferGeometry(this.rad,this.rad,this.rad),
         new THREE.MeshBasicMaterial({color: 0x11FF11})
       )
-      
-      this._view.geometry.boundingBox = null;
+      this.age = 0;
       this.type = 1;
+      this.cleanup_ = false;
+      this._view._rl = {
+        type: this.type
+      }
       this._view.position.copy(pos);
     }
     get view(){
@@ -21,15 +25,21 @@
       this._view.position.copy(vec);
     }
   }
+
   class Poison {
     constructor(pos){
+      this.rad = 1;
       this._view = new THREE.Mesh(
-        new THREE.SphereBufferGeometry(1,1,1),
+        new THREE.SphereBufferGeometry(this.rad,this.rad,this.rad),
         new THREE.MeshBasicMaterial({color: 0xFFF422})
-      )
-      
-      this._view.geometry.boundingBox = null;
+      )      
+      this.age = 0;
+      this.type = 2;
+      this.cleanup_ = false;
       this._view.position.copy(pos);
+      this._view._rl = {
+        type: this.type
+      }
     }
     get view(){
       return this._view;
@@ -44,7 +54,7 @@
 
   class Agent{
     constructor(){
-      this.rad = 1;
+      this.rad = 2;
       this._view = new THREE.Mesh(
         new THREE.BoxBufferGeometry(this.rad,this.rad,this.rad),
         new THREE.MeshBasicMaterial({color: 0xFFAA11})
@@ -205,19 +215,17 @@
      * @returns {Object|null} 
      */
     getNearestCollision(targets_objs){
-      let dst = new THREE.Vector3();
       let targets = targets_objs.map((el)=>{
           return el.view;
       });
+      let dst = new THREE.Vector3();
       dst.setFromMatrixPosition( this._view.matrixWorld );
-      //dst = this._view.position;
-      //var 
       dst.add(this.a.position.clone().negate());
       dst.normalize();
       this.raycaster.set(this.a.position, dst);
-      let intersects = this.raycaster.intersectObjects(targets_objs);
+      let intersects = this.raycaster.intersectObjects(targets);
       if (intersects.length > 0 && intersects[0].distance < this.max_range){
-        return {obj: intersects[0].object, dist: intersects[0].distance}
+        return {obj: intersects[0].object, type: intersects[0].object._rl.type, dist: intersects[0].distance}
       } else {
         return null;
       }
@@ -251,8 +259,8 @@
         // this.W = canvas.width;
         // this.H = canvas.height;
 
-        this.W = 2000;
-        this.H = 2000;
+        this.W = 200;
+        this.H = 200;
 
         this.clock = 0;
         
@@ -268,23 +276,27 @@
 
         // set up food and poison
         this.items = []
-        for(var k=0;k<100;k++) {
-           var x = convnetjs.randf(20, this.W-1800);
-           var y = convnetjs.randf(20, this.H-1800);
-          var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
-          if (t == 1){
-            var it = new Food(new THREE.Vector3(x, y, 0));
-          }
-          else{
-            var it = new Poison(new THREE.Vector3(x, y, 0));
-          }
-          this.items.push(it);
-          this.Scene.add(it.view);
+        for(var k=0;k<1000;k++) {
+          this.generateItem();
         }
         let agent = new Agent();
         this.Scene.add(agent.view);
         this.agents.push(agent);
       }   
+
+      generateItem(){
+        var x = convnetjs.randf(20, this.W);
+        var y = convnetjs.randf(20, this.H);
+        var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
+        if (t == 1){
+          var it = new Food(new THREE.Vector3(x, y, 0));
+        }
+        else{
+          var it = new Poison(new THREE.Vector3(x, y, 0));
+        }
+        this.items.push(it);
+        this.Scene.add(it.view);
+      }
 
       init(json_params){
         this.Container = document.createElement("div");
@@ -372,13 +384,16 @@
         }
         // collide with items
         if(check_items) {
-          let res = eye.getNearestCollision(this.Scene.children);
+          let res = eye.getNearestCollision(this.items);
           if(res) {
-            res.type = it.type; // store type of item
             if(!minres) { minres=res; }
           }
         }
         return minres;
+      }
+      removeItem(it){
+        this.Scene.remove(it.view);
+        this.items.splice(this.items.indexOf(it), 1);
       }
       tick() {
         // tick the environment
@@ -395,7 +410,6 @@
             var res = this.stuff_collide_(e, true, true);
             if(res) {
               // eye collided with wall
-              alert('ok')
               e.sensed_proximity = res.dist;
               e.sensed_type = res.type;
             } else {
@@ -470,32 +484,22 @@
                 // ding! nom nom nom
                 if(it.type === 1) a.digestion_signal += 5.0; // mmm delicious apple
                 if(it.type === 2) a.digestion_signal += -6.0; // ewww poison
-                it.cleanup_ = true;
-                update_items = true;
+                this.removeItem(it);
+                i--;
+                n--;
                 break; // break out of loop, item was consumed
               }
             }
           }
           
           if(it.age > 5000 && this.clock % 100 === 0 && convnetjs.randf(0,1)<0.1) {
-            it.cleanup_ = true; // replace this one, has been around too long
-            update_items = true;
+            this.removeItem(it);
+            i--;
+            n--;
           }
         }
-        if(update_items) {
-          var nt = [];
-          for(var i=0,n=this.items.length;i<n;i++) {
-            var it = this.items[i];
-            if(!it.cleanup_) nt.push(it);
-          }
-          this.items = nt; // swap
-        }
-        if(this.items.length < 30 && this.clock % 10 === 0 && convnetjs.randf(0,1)<0.25) {
-          var newitx = convnetjs.randf(20, this.W-20);
-          var newity = convnetjs.randf(20, this.H-20);
-          var newitt = convnetjs.randi(1, 3); // food or poison (1 and 2)
-          var newit = new Item(newitx, newity, newitt);
-          this.items.push(newit);
+        if(this.items.length < 600 && this.clock % 10 === 0 && convnetjs.randf(0,1)<0.25) {
+          this.generateItem();
         }
         
         // agents are given the opportunity to learn based on feedback of their action on environment
