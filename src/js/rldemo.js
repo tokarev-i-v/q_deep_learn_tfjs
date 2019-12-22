@@ -1,16 +1,15 @@
   var canvas, ctx;
     
   class Food {
-    constructor(){
+    constructor(pos){
       this._view = new THREE.Mesh(
         new THREE.SphereBufferGeometry(1,1,1),
-        new THREE.MeshBasicMaterial({color: 0x111111})
+        new THREE.MeshBasicMaterial({color: 0x11FF11})
       )
+      
+      this._view.geometry.boundingBox = null;
       this.type = 1;
-    }
-    get boundingBox(){
-      this._view.geometry.computeBoundingBox();
-      return this.view.geometry.boundingBox;
+      this._view.position.copy(pos);
     }
     get view(){
       return this._view;
@@ -23,11 +22,14 @@
     }
   }
   class Poison {
-    constructor(){
+    constructor(pos){
       this._view = new THREE.Mesh(
         new THREE.SphereBufferGeometry(1,1,1),
-        new THREE.MeshBasicMaterial({color: 0x111111})
+        new THREE.MeshBasicMaterial({color: 0xFFF422})
       )
+      
+      this._view.geometry.boundingBox = null;
+      this._view.position.copy(pos);
     }
     get view(){
       return this._view;
@@ -45,7 +47,7 @@
       this.rad = 1;
       this._view = new THREE.Mesh(
         new THREE.BoxBufferGeometry(this.rad,this.rad,this.rad),
-        new THREE.MeshBasicMaterial({color: 0x111111})
+        new THREE.MeshBasicMaterial({color: 0xFFAA11})
       );
       
       this.actions = [];
@@ -62,7 +64,7 @@
       let alpha = 0;
       /**Now we create agent's eyes*/
       for (let i = 0; i < 10; i++){
-          let eye = new Eye(this.view.position, alpha, r);
+          let eye = new Eye(this, alpha, r);
           let mesh = eye.view;
           this.view.add(mesh);
           this.eyes.push(eye);
@@ -179,7 +181,7 @@
      * @param {Number} alpha angle 
      * @param {Number} r radius
      */
-    constructor(agent_pos_vec, alpha, r){
+    constructor(a, alpha, r){
       this._view = new THREE.Mesh(
         new THREE.BoxBufferGeometry(1,1,10),
         new THREE.MeshBasicMaterial({color: 0x111111})
@@ -190,16 +192,15 @@
       this._view.rotation.z = Math.PI*(180-alpha)/180;
       this._view.geometry.computeBoundingBox();
       this.raycaster = new THREE.Raycaster();
-      this.max_range = 85;
-      this.sensed_proximity = 85; // what the eye is seeing. will be set in world.tick()
-      this.src_vector = agent_pos_vec;
+      this.max_range = 20;
+      this.sensed_proximity = 20; // what the eye is seeing. will be set in world.tick()
+      this.a = a;
     }
     get view(){
       return this._view;
     }
     /**
      * This function return the nearest detected object.
-     * @param {THREE.Vector3} src from this point we will create ray
      * @param {THREE.Mesh[]} targets array of intersection targets
      * @returns {Object|null} 
      */
@@ -209,9 +210,13 @@
           return el.view;
       });
       dst.setFromMatrixPosition( this._view.matrixWorld );
-      this.raycaster.set(this.src_vector, dst);
-      let intersects = this.raycaster.intersectObjects(targets);
-      if (intersects.length > 0){
+      //dst = this._view.position;
+      //var 
+      dst.add(this.a.position.clone().negate());
+      dst.normalize();
+      this.raycaster.set(this.a.position, dst);
+      let intersects = this.raycaster.intersectObjects(targets_objs);
+      if (intersects.length > 0 && intersects[0].distance < this.max_range){
         return {obj: intersects[0].object, dist: intersects[0].distance}
       } else {
         return null;
@@ -241,6 +246,7 @@
      */
     class World  {
       constructor(){
+        this.init();
         this.agents = [];
         // this.W = canvas.width;
         // this.H = canvas.height;
@@ -262,9 +268,9 @@
 
         // set up food and poison
         this.items = []
-        for(var k=0;k<30;k++) {
-          var x = convnetjs.randf(20, this.W-20);
-          var y = convnetjs.randf(20, this.H-20);
+        for(var k=0;k<100;k++) {
+           var x = convnetjs.randf(20, this.W-1800);
+           var y = convnetjs.randf(20, this.H-1800);
           var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
           if (t == 1){
             var it = new Food(new THREE.Vector3(x, y, 0));
@@ -273,8 +279,8 @@
             var it = new Poison(new THREE.Vector3(x, y, 0));
           }
           this.items.push(it);
+          this.Scene.add(it.view);
         }
-        this.init();
         let agent = new Agent();
         this.Scene.add(agent.view);
         this.agents.push(agent);
@@ -330,7 +336,6 @@
             let ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), new THREE.MeshBasicMaterial({map: tex, side:THREE.DoubleSide}));
             //ground.rotation.x -= Math.PI/2;
             this.Scene.add(ground);
-            alert('ok')
         }.bind(this));
       }
 
@@ -367,7 +372,7 @@
         }
         // collide with items
         if(check_items) {
-          let res = eye.getNearestCollision(this.items);
+          let res = eye.getNearestCollision(this.Scene.children);
           if(res) {
             res.type = it.type; // store type of item
             if(!minres) { minres=res; }
@@ -390,6 +395,7 @@
             var res = this.stuff_collide_(e, true, true);
             if(res) {
               // eye collided with wall
+              alert('ok')
               e.sensed_proximity = res.dist;
               e.sensed_type = res.type;
             } else {
