@@ -1,6 +1,3 @@
-var deepqlearn = deepqlearn || { REVISION: 'ALPHA' };
-
-(function(global) {
   "use strict";
   
   // An agent is in state0 and does action0
@@ -278,15 +275,4 @@ var deepqlearn = deepqlearn || { REVISION: 'ALPHA' };
       elt.appendChild(brainvis);
     }
   }
-  
-  global.Brain = Brain;
-})(deepqlearn);
 
-(function(lib) {
-  "use strict";
-  if (typeof module === "undefined" || typeof module.exports === "undefined") {
-    window.deepqlearn = lib; // in ordinary browser attach library to window
-  } else {
-    module.exports = lib; // in nodejs
-  }
-})(deepqlearn);

@@ -63,7 +63,8 @@
       this.actions = [];
       this.actions.push([1,1]);
       this.actions.push([0.8,1]);
-      this.actions.push([1,0.8]);
+      this.actions.push([1,
+        0.8]);
       this.actions.push([0.5,0]);
       this.actions.push([0,0.5]);
       
@@ -87,9 +88,9 @@
         this._frontEye = this.eyes[Math.round(this.eyes.length/2)-1];
       }
       // braaain
-      this.brain = new deepqlearn.Brain(this.eyes.length * 3, this.actions.length);
-      var spec = document.getElementById('qspec').value;
-      eval(spec);
+      this.brain = new Brain(this.eyes.length * 3, this.actions.length);
+      //var spec = document.getElementById('qspec').value;
+      //eval(spec);
       //this.brain = brain;
       
       this.reward_bonus = 0.0;
@@ -583,7 +584,7 @@
       if(!skipdraw || w.clock % 50 === 0) {
         w.render();
         draw_stats();
-        draw_net();
+        //draw_net();
       }
     }
     
