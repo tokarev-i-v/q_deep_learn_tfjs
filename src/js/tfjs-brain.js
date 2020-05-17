@@ -38,6 +38,12 @@
       // what epsilon to use at test time? (i.e. when learning is disabled)
       this.epsilon_test_time = typeof opt.epsilon_test_time !== 'undefined' ? opt.epsilon_test_time : 0.01;
       
+      this.vis = tfvis.visor().surface({
+        name: 'My First Surface',
+        tab: 'Input Data'
+      });
+      this.drawArea = this.vis.drawArea; // Get the examples
+
       // advanced feature. Sometimes a random action should be biased towards some values
       // for example in flappy bird, we may want to choose to not flap more often
       if(typeof opt.random_action_distribution !== 'undefined') {
@@ -69,17 +75,17 @@
       // create [state -> value of all possible actions] modeling net for the value function
       var layer_defs = [];
       this.NN = new tf.sequential();
-      this.NN.add(tf.layers.dense({inputShape: [1], units:50, activation: 'relu'}));
-      this.NN.add(tf.layers.dense({units:50, activation: 'relu'}));
+      this.NN.add(tf.layers.dense({inputShape: [65], units:30, activation: 'relu'}));
+      this.NN.add(tf.layers.dense({units:30, activation: 'relu'}));
       this.NN.add(tf.layers.dense({
         units: 5,
         kernelInitializer: 'varianceScaling',
-        activation: 'softmax',
-        kernelRegularizer: 'l1l2'
+        kernelRegularizer: 'l1l2',
+        name: "outter"
       }));
-
+      //this.NN.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
       this.BATCH_SIZE = 64;
-      this.tdtrainer = tf.train.sgd(0.01);
+      this.optimizer = tf.train.sgd(0.01);
       
       // experience replay
       this.experience = [];
@@ -117,13 +123,13 @@
       // and return the argmax action and its value
       var svol = new convnetjs.Vol(1, 1, this.net_inputs);
       svol.w = s;
-      var action_values = this.NN.predict(svol);
-      var maxk = 0; 
-      var maxval = action_values.w[0];
-      for(var k=1;k<this.num_actions;k++) {
-        if(action_values.w[k] > maxval) { maxk = k; maxval = action_values.w[k]; }
-      }
-      return {action:maxk, value:maxval};
+      let tens = tf.tensor(s);
+      tens = tens.reshape([1, 65]);
+      var action_values = this.NN.apply(tens);
+      let ret = {action: action_values.max().dataSync()[0], value: action_values.argMax(1).dataSync()[0]};
+      action_values.dispose();
+      tens.dispose();
+      return ret;
     }
     getNetInput(xt) {
       // return s = (x,a,x,a,x,a,xt) state vector. 
@@ -167,7 +173,7 @@
         } else {
           // otherwise use our policy to make decision
           var maxact = this.policy(net_input);
-          action = maxact.action;
+          action = maxact.value;
        }
       } else {
         // pathological case that happens first few iterations 
@@ -186,6 +192,51 @@
       
       return action;
     }
+
+    sampleExperience(batchSize){
+      
+    }
+
+    /**
+     * Perform training on a randomly sampled batch from the replay buffer.
+     *
+     * @param {number} batchSize Batch size.
+     * @param {number} gamma Reward discount rate. Must be >= 0 and <= 1.
+     * @param {tf.train.Optimizer} optimizer The optimizer object used to update
+     *   the weights of the online network.
+     */
+    trainOnReplayBatch(batchSize, gamma, optimizer) {
+      // Get a batch of examples from the replay buffer.
+      const batch = this.replayMemory.sample(batchSize);
+      const lossFunction = () => tf.tidy(() => {
+        const stateTensor = getStateTensor(
+            batch.map(example => example[0]), this.game.height, this.game.width);
+        const actionTensor = tf.tensor1d(
+            batch.map(example => example[1]), 'int32');
+        const qs = this.onlineNetwork.apply(stateTensor, {training: true})
+            .mul(tf.oneHot(actionTensor, NUM_ACTIONS)).sum(-1);
+
+        const rewardTensor = tf.tensor1d(batch.map(example => example[2]));
+        const nextStateTensor = getStateTensor(
+            batch.map(example => example[4]), this.game.height, this.game.width);
+        const nextMaxQTensor =
+            this.targetNetwork.predict(nextStateTensor).max(-1);
+        const doneMask = tf.scalar(1).sub(
+            tf.tensor1d(batch.map(example => example[3])).asType('float32'));
+        const targetQs =
+            rewardTensor.add(nextMaxQTensor.mul(doneMask).mul(gamma));
+        return tf.losses.meanSquaredError(targetQs, qs);
+      });
+
+      // Calculate the gradients of the loss function with repsect to the weights
+      // of the online DQN.
+      const grads = tf.variableGrads(lossFunction);
+      // Use the gradients to update the online DQN's weights.
+      optimizer.applyGradients(grads.grads);
+      tf.dispose(grads);
+      // TODO(cais): Return the loss value here?
+    }
+
     backward(reward) {
       this.latest_reward = reward;
       this.average_reward_window.add(reward);
@@ -214,7 +265,15 @@
           this.experience[ri] = e;
         }
       }
-      
+      const lossFunction = () => tf.tidy(()=>{
+        let x_tensor = tf.tensor(x.w, [1, 65]);
+        let y_tensor = tf.tensor(y);
+        let y_s = tf.tensor(y_new);
+        let output = this.NN.apply(x_tensor);
+        output = output.reshape([output.shape[1]]);
+        const loss = tf.mulStrict(output, y_s).sub(y_tensor).square().sum().mul(0.5);
+        return loss;
+      });
       // learn based on experience, once we have some samples to go on
       // this is where the magic happens...
       if(this.experience.length > this.start_learn_threshold) {
@@ -226,17 +285,29 @@
           x.w = e.state0;
           var maxact = this.policy(e.state1);
           var r = e.reward0 + this.gamma * maxact.value;
-          var ystruct = {dim: e.action0, val: r};
-          var loss = this.NN.fit(x, ystruct, {
-            batchSize: BATCH_SIZE,
-            epochs: 10,
-            shuffle: true,
-            callbacks: fitCallbacks
-          });
-          avcost += loss.loss;
+          var y = [0, 0, 0, 0,0];
+          y[e.action0] = r;
+          var y_new = [0,0,0,0,0]; 
+          y_new[e.action0] = 1;
+
+          // var loss = this.NN.fit(x.w, ystruct.dim, {
+          //   batchSize: 1,
+          //   epochs: 1,
+          //   // shuffle: true,
+          //   // callbacks: fitCallbacks
+          // });
+
+          avcost += lossFunction().dataSync()[0];
         }
-        avcost = avcost/this.tdtrainer.batch_size;
+        if (this.age % this.BATCH_SIZE == 0){
+            const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
+            this.optimizer.applyGradients(grads.grads);
+            tfvis.show.layer({name: 'Model Summary'}, this.NN.getLayer(name='outter'));
+            console.log("OPTIMIZER DOING THIS");
+          }
+        avcost = avcost/this.BATCH_SIZE;
         this.average_loss_window.add(avcost);
+        console.log(this.average_loss_window)
       }
     }
     visSelf(elt) {

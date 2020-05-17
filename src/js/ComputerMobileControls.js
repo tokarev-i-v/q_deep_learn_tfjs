@@ -152,7 +152,6 @@ THREEx.ComputerMobileControls = function (json_params)
 	this.AccelerometerControls = new THREE.DeviceOrientationControls(this.Camera);
 	this.update = this.accelerometerUpdate;
 
-!
 	if (window.DeviceMotionEvent !== undefined || this.DeviceType === this.DEVICE_TYPES.MOBILE) {
 		document.body.appendChild(this.BackMovingButton);
 	    document.body.appendChild(this.AccelerometerControlButton);

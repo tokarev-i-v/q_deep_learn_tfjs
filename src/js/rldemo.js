@@ -1,4 +1,4 @@
-  var canvas, ctx;
+ var canvas, ctx;
     
   class Food {
     constructor(pos){
@@ -260,8 +260,8 @@
         // this.W = canvas.width;
         // this.H = canvas.height;
 
-        this.W = 200;
-        this.H = 200;
+        this.W = 300;
+        this.H = 300;
 
         this.clock = 0;
         
@@ -277,7 +277,7 @@
 
         // set up food and poison
         this.items = []
-        for(var k=0;k<1000;k++) {
+        for(var k=0;k<4000;k++) {
           this.generateItem();
         }
         let agent = new Agent();
@@ -286,8 +286,8 @@
       }   
 
       generateItem(){
-        var x = convnetjs.randf(20, this.W);
-        var y = convnetjs.randf(20, this.H);
+        var x = convnetjs.randf(-150, this.W-100);
+        var y = convnetjs.randf(-150, this.H-100);
         var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
         if (t == 1){
           var it = new Food(new THREE.Vector3(x, y, 0));
@@ -499,7 +499,7 @@
             n--;
           }
         }
-        if(this.items.length < 600 && this.clock % 10 === 0 && convnetjs.randf(0,1)<0.25) {
+        if(this.items.length < 5000 && this.clock % 10 === 0 && convnetjs.randf(0,1)<0.25) {
           this.generateItem();
         }
         

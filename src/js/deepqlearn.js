@@ -252,6 +252,7 @@
           avcost += loss.loss;
         }
         avcost = avcost/this.tdtrainer.batch_size;
+        console.log(avcost);
         this.average_loss_window.add(avcost);
       }
     },
