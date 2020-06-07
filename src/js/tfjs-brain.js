@@ -75,8 +75,9 @@
       // create [state -> value of all possible actions] modeling net for the value function
       var layer_defs = [];
       this.NN = new tf.sequential();
-      this.NN.add(tf.layers.dense({inputShape: [65], units:30, activation: 'relu'}));
-      this.NN.add(tf.layers.dense({units:30, activation: 'relu'}));
+      this.NN.add(tf.layers.dense({inputShape: [65], units:50, activation: 'relu'}));
+      this.NN.add(tf.layers.dense({units:50, activation: 'relu'}));
+      this.NN.add(tf.layers.dense({units:50, activation: 'relu'}));
       this.NN.add(tf.layers.dense({
         units: 5,
         kernelInitializer: 'varianceScaling',
@@ -85,7 +86,7 @@
       }));
       //this.NN.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
       this.BATCH_SIZE = 64;
-      this.optimizer = tf.train.sgd(0.01);
+      this.optimizer = tf.train.sgd(0.001);
       
       // experience replay
       this.experience = [];
@@ -290,24 +291,17 @@
           var y_new = [0,0,0,0,0]; 
           y_new[e.action0] = 1;
 
-          // var loss = this.NN.fit(x.w, ystruct.dim, {
-          //   batchSize: 1,
-          //   epochs: 1,
-          //   // shuffle: true,
-          //   // callbacks: fitCallbacks
-          // });
 
           avcost += lossFunction().dataSync()[0];
         }
-        if (this.age % this.BATCH_SIZE == 0){
             const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
             this.optimizer.applyGradients(grads.grads);
             tfvis.show.layer({name: 'Model Summary'}, this.NN.getLayer(name='outter'));
+            this.NN.getWeights()[2].print();
             console.log("OPTIMIZER DOING THIS");
-          }
         avcost = avcost/this.BATCH_SIZE;
         this.average_loss_window.add(avcost);
-        console.log(this.average_loss_window)
+        console.log("avg: %s", this.average_loss_window.get_average())
       }
     }
     visSelf(elt) {

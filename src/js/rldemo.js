@@ -499,7 +499,7 @@
             n--;
           }
         }
-        if(this.items.length < 5000 && this.clock % 10 === 0 && convnetjs.randf(0,1)<0.25) {
+        if(this.items.length < 5000) {
           this.generateItem();
         }
         
