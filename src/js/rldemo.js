@@ -342,7 +342,7 @@
         this.Clock = new THREE.Clock();
 
         let TextureLoader = new THREE.TextureLoader();
-        TextureLoader.load("./src/src/models/forest/grass.png", function (tex) {
+        TextureLoader.load("./src/models/forest/grass.png", function (tex) {
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
             tex.repeat.set(100, 100);
