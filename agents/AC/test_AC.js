@@ -2,11 +2,7 @@ import * as tf from '@tensorflow/tfjs-node';
 
 import {AC} from "./AC";
 
-function test_constructor(){
-    let ac = AC();
-}
-
-describe("A suite is just a function", function(){
+describe("AC constructor testing", function(){
     let ac = new AC();
     it("and so is a spec", function() {
         let a = true;

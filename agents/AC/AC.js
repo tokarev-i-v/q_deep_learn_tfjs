@@ -1,3 +1,32 @@
+class Buffer{
+    constructor(gamma = 0.99){
+        this.gamma = gamma;
+        this.obs = [];
+        this.act = [];
+        this.ret = [];
+        this.rtg = [];
+    }
+
+    store(temp_traj, last_sv){
+        if(temp_traj.length > 0){
+            let nulls = temp_traj.map((el)=>{
+                return el[0];
+            });
+            this.obs = this.obs.concat(nulls);
+
+            
+        }
+    }
+
+    discounted_rewards(rews, last_sv, gamma){
+        let rtg = tf.zerosLike(rews).buffer();
+        rtg.set(rews[rews.length-1] + gamma * last_sv, rews.length-1);
+        for(let i = rews.length-1;i >= 0; i--){
+            rtg.set(rews[i] + gamma * rtg[i+1], i);
+        }
+        return rtg;
+    }
+}
 
 export class AC{
 
@@ -5,7 +34,9 @@ export class AC{
 
     }
 
+
     log_summary(writer, step, p_loss, entropy, p_log, ret_batch){
+
     }
     mlp(x, hidden_layers, output_size, activation= tf.layers.reLU, last_activation=null){
     
