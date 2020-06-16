@@ -12,10 +12,29 @@ class Buffer{
             let nulls = temp_traj.map((el)=>{
                 return el[0];
             });
+            let firsts = temp_traj.map((el)=>{
+                return el[1];
+            });
+            let seconds = temp_traj.map((el)=>{
+                return el[2];
+            });
+            let thirds = temp_traj.map((el)=>{
+                return el[3];
+            });
             this.obs = this.obs.concat(nulls);
-
-            
+            let rtg = this.discounted_rewards(firsts, last_sv, self.gamma);
+            let temp = rtg.map((value, index) => {
+                value - thirds[i];
+            });
+            this.ret = this.ret.concat(temp);
+            this.rtg.concat(rtg);
+            this.act.concat(seconds);
         }
+    
+    }
+
+    getBatch(){
+        return tf.tensor(this.obs), tf.tensor(this.act), tf.tensor(this.ret), tf.tensor(this.rtg);
     }
 
     discounted_rewards(rews, last_sv, gamma){
@@ -24,7 +43,8 @@ class Buffer{
         for(let i = rews.length-1;i >= 0; i--){
             rtg.set(rews[i] + gamma * rtg[i+1], i);
         }
-        return rtg;
+
+        return rtg.toTensor().dataSync();
     }
 }
 
