@@ -7,29 +7,29 @@
   <meta name="description" content="">
   <meta name="author" content="">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" type="text/css" href="/src\src\css\styles.css">
-  <link rel="stylesheet" type="text/css" href="/src\src\css\MovingButtons.css">
-  <link rel="stylesheet" href="/src\css\style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"> </script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
-  <script>
- 
-  </script>
-  <!-- <script src='./src/js/three.min.js'></script> -->
-  <script src="/src\src\js\stats.min.js"></script>
-  <script src="/src\src\js\ColladaLoader.js"></script>
-  <script src="/src\src\js\FlyControls.js"></script>
-  <script src="/src\js\convnet.js"></script>
-  <script src="/src\js\util.js"></script>
-  <script src="/src\js\vis.js"></script>
+  <link rel="stylesheet" type="text/css" href="/src/css/styles.css">
+  <link rel="stylesheet" type="text/css" href="/src/css/MovingButtons.css">
+  <link rel="stylesheet" href="/src/css/style.css">
+  <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"> </script> -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/2.0.0-rc.4/tf.js"> </script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+  <!-- Adds the WASM backend to the global backend registry -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/tf-backend-wasm.js"></script> -->
+  <script src="/src/js/three.min.js"></script>
+  <script src="/src/js/stats.min.js"></script>
+  <script src="/src/js/ColladaLoader.js"></script>
+  <script src="/src/js/FlyControls.js"></script>
+  <script src="/src/js/convnet.js"></script>
+  <script src="/src/js/util.js"></script>
+  <script src="/src/js/vis.js"></script>
   <!-- <script src="./src/js/deepqlearn.js"></script> -->
-  <script src="/src\js\tfjs-brain.js"></script>
+  <script src="/src/js/tfjs-brain.js"></script>
   
-  <script src="/src\js\rldemo.js"></script>
+  <script src="/src/js/rldemo.js"></script>
   <style>canvas { border: 1px solid white; }</style>
 
  </head>
- <body onload="start();">
+ <body>
    <div id="wrap">
    <h2><a href="http://cs.stanford.edu/people/karpathy/convnetjs/">ConvNetJS</a> Deep Q Learning Demo</h2>
    <h1>Description</h1>
@@ -130,5 +130,9 @@ var brain = new deepqlearn.Brain(num_inputs, num_actions, opt); // woohoo
    <br>
    
    </div>
+   <script>tf.disableDeprecationWarnings();
+tf.setBackend("cpu").then(() => {
+  start();
+});</script>
  </body>
 </html>

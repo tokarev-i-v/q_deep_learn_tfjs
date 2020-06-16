@@ -429,6 +429,7 @@ Brain.prototype = {
 
       avcost = avcost / this.tdtrainer.batch_size;
       this.average_loss_window.add(avcost);
+      console.log(this.average_loss_window.get_average());
     }
   },
   visSelf: function (elt) {
