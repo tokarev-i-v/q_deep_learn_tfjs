@@ -63,23 +63,22 @@
       this.actions = [];
       this.actions.push([1,1]);
       this.actions.push([0.8,1]);
-      this.actions.push([1,
-        0.8]);
+      this.actions.push([1,0.8]);
       this.actions.push([0.5,0]);
       this.actions.push([0,0.5]);
       
       // properties
       this.eyes = [];
       /**star */
-      let r = 20;
-      let alpha = 0;
+      let r = 7;
+      let alpha = -30;
       /**Now we create agent's eyes*/
       for (let i = 0; i < 10; i++){
           let eye = new Eye(this, alpha, r);
           let mesh = eye.view;
           this.view.add(mesh);
           this.eyes.push(eye);
-          alpha += r;
+          alpha += 5;
       }
       this._frontEye = null;
       if(this.eyes.length % 2 === 0){
@@ -142,8 +141,11 @@
       for(var i=0;i<num_eyes;i++) {
         var e = this.eyes[i];
         // agents dont like to see walls, especially up close
-        proximity_reward += e.sensed_type === 0 ? e.sensed_proximity/e.max_range : 1.0;
+        // proximity_reward += e.sensed_type === 0 ? e.sensed_proximity/e.max_range : 0.0;
+        proximity_reward += e.sensed_type === 1 ? (1 - e.sensed_proximity/e.max_range) : 0.0;
+        proximity_reward += e.sensed_type === 2 ? (- e.sensed_proximity/e.max_range) : 0.0;
       }
+      // console.log("num_eyes: %s ", num_eyes);    
       proximity_reward = proximity_reward/num_eyes;
       proximity_reward = Math.min(1.0, proximity_reward * 2);
       
@@ -154,9 +156,8 @@
       // agents like to eat good things
       var digestion_reward = this.digestion_signal;
       this.digestion_signal = 0.0;
-      
-      var reward = proximity_reward + forward_reward + digestion_reward;
-      
+      var reward = proximity_reward + forward_reward + digestion_reward; 
+      // console.log("dig: %s proximity_reward %s forward_reward %s reward: %s", digestion_reward, proximity_reward, forward_reward, reward);     
       // pass to brain for learning
       this.brain.backward(reward);
     }
@@ -203,7 +204,7 @@
       this._view.rotation.z = Math.PI*(180-alpha)/180;
       this._view.geometry.computeBoundingBox();
       this.raycaster = new THREE.Raycaster();
-      this.max_range = 20;
+      this.max_range = 7;
       this.sensed_proximity = 20; // what the eye is seeing. will be set in world.tick()
       this.a = a;
     }
@@ -260,8 +261,8 @@
         // this.W = canvas.width;
         // this.H = canvas.height;
 
-        this.W = 300;
-        this.H = 300;
+        this.W = 200;
+        this.H = 200;
 
         this.clock = 0;
         
@@ -286,8 +287,8 @@
       }   
 
       generateItem(){
-        var x = convnetjs.randf(-150, this.W-100);
-        var y = convnetjs.randf(-150, this.H-100);
+        var x = convnetjs.randf(-this.W, this.W);
+        var y = convnetjs.randf(-this.H, this.H);
         var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
         if (t == 1){
           var it = new Food(new THREE.Vector3(x, y, 0));
@@ -483,8 +484,8 @@
               var rescheck = this.stuff_collide_(a.frontEye, true, false);
               if(!rescheck) { 
                 // ding! nom nom nom
-                if(it.type === 1) a.digestion_signal += 5.0; // mmm delicious apple
-                if(it.type === 2) a.digestion_signal += -6.0; // ewww poison
+                if(it.type === 1) a.digestion_signal += 0.5; // mmm delicious apple
+                if(it.type === 2) a.digestion_signal += -0.6; // ewww poison
                 this.removeItem(it);
                 i--;
                 n--;

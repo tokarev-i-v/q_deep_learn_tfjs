@@ -1,4 +1,4 @@
-class Buffer{
+export class Buffer{
     constructor(gamma = 0.99){
         this.gamma = gamma;
         this.obs = [];
@@ -46,11 +46,17 @@ class Buffer{
 
         return rtg.toTensor().dataSync();
     }
+
+    get length(){
+        return this.obs.length;
+    }
 }
 
 export class AC{
 
     constructor(hidden_sizes=[64], ac_lr=0.004, cr_lr=0.015, gamma=0.99, steps_per_epoch=100, ){
+        
+        
 
     }
 

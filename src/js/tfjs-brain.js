@@ -38,11 +38,11 @@
       // what epsilon to use at test time? (i.e. when learning is disabled)
       this.epsilon_test_time = typeof opt.epsilon_test_time !== 'undefined' ? opt.epsilon_test_time : 0.01;
       
-      this.vis = tfvis.visor().surface({
-        name: 'My First Surface',
-        tab: 'Input Data'
-      });
-      this.drawArea = this.vis.drawArea; // Get the examples
+      // this.vis = tfvis.visor().surface({
+      //   name: 'My First Surface',
+      //   tab: 'Input Data'
+      // });
+      // this.drawArea = this.vis.drawArea; // Get the examples
 
       // advanced feature. Sometimes a random action should be biased towards some values
       // for example in flappy bird, we may want to choose to not flap more often
@@ -77,11 +77,9 @@
       this.NN = new tf.sequential();
       this.NN.add(tf.layers.dense({inputShape: [65], units:50, activation: 'relu'}));
       this.NN.add(tf.layers.dense({units:50, activation: 'relu'}));
-      this.NN.add(tf.layers.dense({units:50, activation: 'relu'}));
       this.NN.add(tf.layers.dense({
         units: 5,
-        kernelInitializer: 'varianceScaling',
-        kernelRegularizer: 'l1l2',
+        kernelRegularizer: tf.regularizers.l2(),
         name: "outter"
       }));
       //this.NN.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
@@ -127,7 +125,7 @@
       let tens = tf.tensor(s);
       tens = tens.reshape([1, 65]);
       var action_values = this.NN.apply(tens);
-      let ret = {action: action_values.max().dataSync()[0], value: action_values.argMax(1).dataSync()[0]};
+      let ret = {action: action_values.argMax(1).dataSync()[0], value: action_values.max().dataSync()[0] };
       action_values.dispose();
       tens.dispose();
       return ret;
@@ -272,7 +270,21 @@
         let y_s = tf.tensor(y_new);
         let output = this.NN.apply(x_tensor);
         output = output.reshape([output.shape[1]]);
+        // console.log("output %s y_s %s mul_strict: %s y_tensor  %s", 
+        // JSON.stringify(output.dataSync()), 
+        // JSON.stringify(y_s.dataSync()), 
+        // JSON.stringify(tf.mulStrict(output, y_s).dataSync()),
+        // JSON.stringify(y_tensor.dataSync()),
+        // );
         const loss = tf.mulStrict(output, y_s).sub(y_tensor).square().sum().mul(0.5);
+
+        // console.log("tf.mulStrict(output, y_s) %s tf.mulStrict(output, y_s).sub(y_tensor) %s tf.mulStrict(output, y_s).sub(y_tensor).square(): %s tf.mulStrict(output, y_s).sub(y_tensor).square().sum()  %s", 
+        // JSON.stringify(tf.mulStrict(output, y_s).dataSync()), 
+        // JSON.stringify(tf.mulStrict(output, y_s).sub(y_tensor).dataSync()), 
+        // JSON.stringify(tf.mulStrict(output, y_s).sub(y_tensor).square().dataSync()),
+        // JSON.stringify(tf.mulStrict(output, y_s).sub(y_tensor).square().sum().dataSync()),
+        // );
+
         return loss;
       });
       // learn based on experience, once we have some samples to go on
@@ -291,14 +303,12 @@
           var y_new = [0,0,0,0,0]; 
           y_new[e.action0] = 1;
 
-
+          const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
+          this.optimizer.applyGradients(grads.grads);
           avcost += lossFunction().dataSync()[0];
+          // console.log("loss %s", avcost);
         }
-            const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
-            this.optimizer.applyGradients(grads.grads);
-            tfvis.show.layer({name: 'Model Summary'}, this.NN.getLayer(name='outter'));
-            this.NN.getWeights()[2].print();
-            console.log("OPTIMIZER DOING THIS");
+
         avcost = avcost/this.BATCH_SIZE;
         this.average_loss_window.add(avcost);
         console.log("avg: %s", this.average_loss_window.get_average())
