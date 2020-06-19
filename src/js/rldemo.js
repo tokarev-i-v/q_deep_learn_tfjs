@@ -70,7 +70,7 @@
       // properties
       this.eyes = [];
       /**star */
-      let r = 7;
+      let r = 20;
       let alpha = -30;
       /**Now we create agent's eyes*/
       for (let i = 0; i < 10; i++){
@@ -78,7 +78,7 @@
           let mesh = eye.view;
           this.view.add(mesh);
           this.eyes.push(eye);
-          alpha += 5;
+          alpha += 20;
       }
       this._frontEye = null;
       if(this.eyes.length % 2 === 0){
@@ -142,12 +142,11 @@
         var e = this.eyes[i];
         // agents dont like to see walls, especially up close
         // proximity_reward += e.sensed_type === 0 ? e.sensed_proximity/e.max_range : 0.0;
-        proximity_reward += e.sensed_type === 1 ? (1 - e.sensed_proximity/e.max_range) : 0.0;
-        proximity_reward += e.sensed_type === 2 ? (- e.sensed_proximity/e.max_range) : 0.0;
+        proximity_reward += e.sensed_type === 1 ? 1 - e.sensed_proximity : 0.0;
+        proximity_reward += e.sensed_type === 2 ? -(1 - e.sensed_proximity/e.max_range) : 0.0;
       }
       // console.log("num_eyes: %s ", num_eyes);    
       proximity_reward = proximity_reward/num_eyes;
-      proximity_reward = Math.min(1.0, proximity_reward * 2);
       
       // agents like to go straight forward
       var forward_reward = 0.0;
@@ -204,7 +203,7 @@
       this._view.rotation.z = Math.PI*(180-alpha)/180;
       this._view.geometry.computeBoundingBox();
       this.raycaster = new THREE.Raycaster();
-      this.max_range = 7;
+      this.max_range = 20;
       this.sensed_proximity = 20; // what the eye is seeing. will be set in world.tick()
       this.a = a;
     }

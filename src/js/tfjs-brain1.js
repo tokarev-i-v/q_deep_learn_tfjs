@@ -77,16 +77,15 @@
       this.NN = new tf.sequential();
       this.NN.add(tf.layers.dense({inputShape: [65], units:50, activation: 'relu'}));
       this.NN.add(tf.layers.dense({units:50, activation: 'relu'}));
-      this.NN.add(tf.layers.dense({units:30, activation: 'relu'}));
       this.NN.add(tf.layers.dense({
         units: 5,
-        kernelRegularizer: tf.regularizers.l2(),
+        kernelRegularizer: 'l1l2',
         activation: 'linear',
         name: "outter"
       }));
-      //this.NN.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
+      this.NN.compile({loss: 'meanSquaredError', optimizer: 'adam'});
       this.BATCH_SIZE = 64;
-      this.optimizer = tf.train.sgd(0.001);
+      // this.optimizer = tf.train.sgd(0.001);
       
       // experience replay
       this.experience = [];
@@ -294,24 +293,28 @@
       // this is where the magic happens...
       if(this.experience.length > this.start_learn_threshold) {
         var avcost = 0.0;
+        var x_train = [];
+        var y_train = [];
         for(var k=0;k < this.BATCH_SIZE;k++) {
           var re = convnetjs.randi(0, this.experience.length);
           var e = this.experience[re];
           var x = new convnetjs.Vol(1, 1, this.net_inputs);
           x.w = e.state0;
+          x_train.push(x.w);
           var maxact = this.policy(e.state1);
           var r = e.reward0 + this.gamma * maxact.value;
           var y = [0, 0, 0, 0,0];
           y[e.action0] = r;
           var y_new = [0,0,0,0,0]; 
           y_new[e.action0] = 1;
+          y_train.push(r);
 
-          const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
-          this.optimizer.applyGradients(grads.grads);
-          avcost += lossFunction().dataSync()[0];
+          // const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
+          // this.optimizer.applyGradients(grads.grads);
+          // avcost += lossFunction().dataSync()[0];
           // console.log("loss %s", avcost);
         }
-
+        var x_train = tf.
         avcost = avcost/this.BATCH_SIZE;
         this.average_loss_window.add(avcost);
         console.log("avg: %s", this.average_loss_window.get_average())
