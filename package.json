@@ -9,24 +9,24 @@
     "node": ">=8.9.0"
   },
   "dependencies": {
+    "@babel/node": "^7.10.1",
+    "@tensorflow/tfjs": "^2.0.1",
+    "@tensorflow/tfjs-core": "^2.0.1",
     "@tensorflow/tfjs-node": "2.0.1",
     "@tensorflow/tfjs-node-gpu": "2.0.1",
-    "@babel/node": "^7.10.1",
-    "@tensorflow/tfjs-backend-wasm": "^1.5.2-alpha1",
-    "@tensorflow/tfjs-converter": "^1.6.1",
-    "@tensorflow/tfjs-core": "^1.6.1",
     "babel-node": "^0.0.1-security",
     "chai": "^4.2.0",
     "express": "^4.17.1",
     "jasmine": "^3.5.0",
-    "mocha": "^8.0.1"
+    "mocha": "^8.0.1",
+    "src": "^1.1.2",
+    "tfjs": "^0.6.0"
   },
   "scripts": {
-    "watch": "cross-env NODE_ENV=development parcel index.html src/**/* --no-hmr --target browser --global window",
+    "watch": "cross-env NODE_ENV=development parcel index.html --no-hmr --target browser --global window",
     "build": "cross-env NODE_ENV=production parcel build index.html --target browser --out-dir build --public-url ./",
     "test": "babel-node tests.js",
-    "lint": "eslint .",
-    "link-local": "yalc link @tensorflow-models/facemesh"
+    "lint": "eslint ."
   },
   "browser": {
     "crypto": false
@@ -40,8 +40,7 @@
     "cross-env": "^7.0.2",
     "eslint": "^6.8.0",
     "eslint-config-google": "^0.9.1",
-    "parcel-bundler": "~1.10.3",
-    "yalc": "~1.0.0-pre.27"
+    "parcel-bundler": "~1.10.3"
   },
   "eslintConfig": {
     "extends": "google",
@@ -59,5 +58,7 @@
   },
   "eslintIgnore": [
     "dist/"
-  ]
+  ],
+  "repository": "https://github.com/polyzer/q_deep_learn_tfjs.git",
+  "author": "polyzer <realpolyzer@yandex.ru>"
 }
