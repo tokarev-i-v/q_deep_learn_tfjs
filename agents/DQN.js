@@ -85,11 +85,11 @@ export default class DQN{
       this.reward_window = new Array(this.window_size);
       this.net_window = new Array(this.window_size);
       this.NN = new tf.sequential();
-      this.NN.add(tf.layers.dense({inputShape: [65], units:50, activation: 'relu'}));
+      this.NN.add(tf.layers.dense({inputShape: [this.net_inputs], units:50, activation: 'relu'}));
       this.NN.add(tf.layers.dense({units:50, activation: 'relu'}));
       this.NN.add(tf.layers.dense({units:30, activation: 'relu'}));
       this.NN.add(tf.layers.dense({
-        units: 5,
+        units: this.num_actions,
         kernelRegularizer: tf.regularizers.l2(),
         activation: 'linear',
         name: "outter"
@@ -132,7 +132,7 @@ export default class DQN{
     }
     policy(s) {
         let tens = tf.tensor(s);
-        tens = tens.reshape([1, 65]);
+        tens = tens.reshape([1, this.net_inputs]);
         var action_values = this.NN.apply(tens);
         let ret = {action: action_values.argMax(1).dataSync()[0], value: action_values.max().dataSync()[0] };
         action_values.dispose();
@@ -230,7 +230,7 @@ export default class DQN{
           }
         }
         const lossFunction = () => tf.tidy(()=>{
-          let x_tensor = tf.tensor(x, [1, 65]);
+          let x_tensor = tf.tensor(x, [1, this.net_inputs]);
           let y_tensor = tf.tensor(y);
           let y_s = tf.tensor(y_new);
           let output = this.NN.apply(x_tensor);
@@ -238,8 +238,6 @@ export default class DQN{
           const loss = tf.mulStrict(output, y_s).sub(y_tensor).square().sum().mul(0.5);
           return loss;
         });
-        // learn based on experience, once we have some samples to go on
-        // this is where the magic happens...
         if(this.experience.length > this.start_learn_threshold) {
           var avcost = 0.0;
           for(var k=0;k < this.BATCH_SIZE;k++) {
@@ -248,15 +246,14 @@ export default class DQN{
             var x = e.state0;
             var maxact = this.policy(e.state1);
             var r = e.reward0 + this.gamma * maxact.value;
-            var y = [0, 0, 0, 0,0];
+            var y = new Array(this.num_actions); for (let i=0; i<this.num_actions; ++i) y[i] = 0;
             y[e.action0] = r;
-            var y_new = [0,0,0,0,0]; 
+            var y_new = new Array(this.num_actions); for (let i=0; i<this.num_actions; ++i) y_new[i] = 0; 
             y_new[e.action0] = 1;
   
             const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
             this.optimizer.applyGradients(grads.grads);
             avcost += lossFunction().dataSync()[0];
-            // console.log("loss %s", avcost);
           }
   
           avcost = avcost/this.BATCH_SIZE;
