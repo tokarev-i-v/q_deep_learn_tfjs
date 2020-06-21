@@ -1,9 +1,19 @@
 import * as THREE from '../src/jsm/three.module';
 import {ColladaLoader} from '../src/jsm/ColladaLoader';
 import {FlyControls} from '../src/jsm/FlyControls';
-
+import Stats from '../src/jsm/stats.module';
 var canvas, ctx;
-    
+
+function getRandomArbitrary(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min)) + min; //Максимум не включается, минимум включается
+}
+
 class Food {
   constructor(pos){
     this.rad = 1;
@@ -57,7 +67,7 @@ class Poison {
 }
 
 class Agent{
-  constructor(){
+  constructor(opt){
     this.rad = 2;
     this._view = new THREE.Mesh(
       new THREE.BoxBufferGeometry(this.rad,this.rad,this.rad),
@@ -70,14 +80,15 @@ class Agent{
     this.actions.push([1,0.8]);
     this.actions.push([0.5,0]);
     this.actions.push([0,0.5]);
-    
+    this.eyes_count = opt.eyes_count;
+
     // properties
     this.eyes = [];
     /**star */
     let r = 20;
     let alpha = -30;
     /**Now we create agent's eyes*/
-    for (let i = 0; i < 10; i++){
+    for (let i = 0; i < this.eyes_count; i++){
         let eye = new Eye(this, alpha, r);
         let mesh = eye.view;
         this.view.add(mesh);
@@ -91,7 +102,7 @@ class Agent{
       this._frontEye = this.eyes[Math.round(this.eyes.length/2)-1];
     }
     // braaain
-    this.brain = new Brain(this.eyes.length * 3, this.actions.length);
+    this.brain = new opt.algo({num_states: this.eyes.length * 3, num_actions: this.actions.length});
     //var spec = document.getElementById('qspec').value;
     //eval(spec);
     //this.brain = brain;
@@ -258,7 +269,9 @@ class Eye{
    * World Contains all features.
    */
 export default class FlatAreaEatWorld {
-    constructor(){
+    constructor(opt){
+
+
       this.init();
       this.agents = [];
       // this.W = canvas.width;
@@ -284,15 +297,15 @@ export default class FlatAreaEatWorld {
       for(var k=0;k<4000;k++) {
         this.generateItem();
       }
-      let agent = new Agent();
+      let agent = new Agent({eyes_count: 10, algo: opt.agent});
       this.Scene.add(agent.view);
       this.agents.push(agent);
     }   
 
     generateItem(){
-      var x = convnetjs.randf(-this.W, this.W);
-      var y = convnetjs.randf(-this.H, this.H);
-      var t = convnetjs.randi(1, 3); // food or poison (1 and 2)
+      var x = getRandomArbitrary(-this.W, this.W);
+      var y = getRandomArbitrary(-this.H, this.H);
+      var t = getRandomInt(1, 3); // food or poison (1 and 2)
       if (t == 1){
         var it = new Food(new THREE.Vector3(x, y, 0));
       }
@@ -346,7 +359,7 @@ export default class FlatAreaEatWorld {
       this.Clock = new THREE.Clock();
 
       let TextureLoader = new THREE.TextureLoader();
-      TextureLoader.load("./src/models/forest/grass.png", function (tex) {
+      TextureLoader.load("forest/grass.png", function (tex) {
           tex.wrapS = THREE.RepeatWrapping;
           tex.wrapT = THREE.RepeatWrapping;
           tex.repeat.set(100, 100);
@@ -372,7 +385,7 @@ export default class FlatAreaEatWorld {
       //         this.Mixer.update(delta);
       //     }
       
-       w.agents[0].brain.visSelf(document.getElementById('brain_info_div'));
+      //this.agents[0].brain.visSelf(document.getElementById('brain_info_div'));
       this.Controls.update(delta);
   }
 
@@ -400,6 +413,21 @@ export default class FlatAreaEatWorld {
       this.Scene.remove(it.view);
       this.items.splice(this.items.indexOf(it), 1);
     }
+
+    step() {
+      this.tick();
+      if(!this.skipdraw || this.clock % 50 === 0) {
+        this.render();
+        //draw_stats();
+        //draw_net();
+      }
+    }
+
+    start() {
+      requestAnimationFrame(this.start.bind(this));
+      this.step();
+    }
+
     tick() {
       // tick the environment
       this.clock++;
@@ -497,7 +525,7 @@ export default class FlatAreaEatWorld {
           }
         }
         
-        if(it.age > 5000 && this.clock % 100 === 0 && convnetjs.randf(0,1)<0.1) {
+        if(it.age > 5000 && this.clock % 100 === 0 && getRandomArbitrary(0,1)<0.1) {
           this.removeItem(it);
           i--;
           n--;
@@ -514,118 +542,3 @@ export default class FlatAreaEatWorld {
     }
   }
   
-  
-  function draw_net() {
-    if(simspeed <=1) {
-      // we will always draw at these speeds
-    } else {
-      if(w.clock % 50 !== 0) return;  // do this sparingly
-    }
-    
-    var canvas = document.getElementById("net_canvas");
-    var ctx = canvas.getContext("2d");
-    var W = canvas.width;
-    var H = canvas.height;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    var L = w.agents[0].brain.value_net.layers;
-    var dx = (W - 50)/L.length;
-    var x = 10;
-    var y = 40;
-    ctx.font="12px Verdana";
-    ctx.fillStyle = "rgb(0,0,0)";
-    ctx.fillText("Value Function Approximating Neural Network:", 10, 14);
-    for(var k=0;k<L.length;k++) {
-      if(typeof(L[k].out_act)==='undefined') continue; // maybe not yet ready
-      var kw = L[k].out_act.w;
-      var n = kw.length;
-      var dy = (H-50)/n;
-      ctx.fillStyle = "rgb(0,0,0)";
-      ctx.fillText(L[k].layer_type + "(" + n + ")", x, 35);
-      for(var q=0;q<n;q++) {
-        var v = Math.floor(kw[q]*100);
-        if(v >= 0) ctx.fillStyle = "rgb(0,0," + v + ")";
-        if(v < 0) ctx.fillStyle = "rgb(" + (-v) + ",0,0)";
-        ctx.fillRect(x,y,10,10);
-        y += 12;
-        if(y>H-25) { y = 40; x += 12};
-      }
-      x += 50;
-      y = 40;
-    }
-  }
-  
-
-  // Tick the world
-  function tick() {
-    w.tick();
-    if(!skipdraw || w.clock % 50 === 0) {
-      w.render();
-      draw_stats();
-      //draw_net();
-    }
-  }
-  
-  var simspeed = 2;
-  function goveryfast() {
-    window.clearInterval(current_interval_id);
-    current_interval_id = setInterval(tick, 0);
-    skipdraw = true;
-    simspeed = 3;
-  }
-  function gofast() {
-    window.clearInterval(current_interval_id);
-    current_interval_id = setInterval(tick, 0);
-    skipdraw = false;
-    simspeed = 2;
-  }
-  function gonormal() {
-    window.clearInterval(current_interval_id);
-    current_interval_id = setInterval(tick, 30);
-    skipdraw = false;
-    simspeed = 1;
-  }
-  function goslow() {
-    window.clearInterval(current_interval_id);
-    current_interval_id = setInterval(tick, 200);
-    skipdraw = false;
-    simspeed = 0;
-  }
-  
-  function savenet() {
-    var j = w.agents[0].brain.value_net.toJSON();
-    var t = JSON.stringify(j);
-    document.getElementById('tt').value = t;
-  }
-  
-  function loadnet() {
-    var t = document.getElementById('tt').value;
-    var j = JSON.parse(t);
-    w.agents[0].brain.value_net.fromJSON(j);
-    stoplearn(); // also stop learning
-    gonormal();
-  }
-  
-  function startlearn() {
-    w.agents[0].brain.learning = true;
-  }
-  function stoplearn() {
-    w.agents[0].brain.learning = false;
-  }
-  
-  function reload() {
-    w.agents = [new Agent()]; // this should simply work. I think... ;\
-    reward_graph = new cnnvis.Graph(); // reinit
-  }
-  
-  var w; // global world object
-  var current_interval_id;
-  var skipdraw = false;
-
-  function start() {
-    canvas = document.getElementById("canvas");
-    ctx = canvas.getContext("2d");
-    
-    w = new World();
-    
-    gofast();
-  }

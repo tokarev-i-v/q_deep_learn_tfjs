@@ -1,5 +1,49 @@
 import * as tf from '@tensorflow/tfjs'
 
+function getRandomArbitrary(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min)) + min; //Максимум не включается, минимум включается
+}
+
+class Experience  {
+  constructor(state0, action0, reward0, state1){
+    this.state0 = state0;
+    this.action0 = action0;
+    this.reward0 = reward0;
+    this.state1 = state1;        
+  }
+}
+
+var Window = function(size, minsize) {
+  this.v = [];
+  this.size = typeof(size)==='undefined' ? 100 : size;
+  this.minsize = typeof(minsize)==='undefined' ? 20 : minsize;
+  this.sum = 0;
+}
+Window.prototype = {
+  add: function(x) {
+    this.v.push(x);
+    this.sum += x;
+    if(this.v.length>this.size) {
+      var xold = this.v.shift();
+      this.sum -= xold;
+    }
+  },
+  get_average: function() {
+    if(this.v.length < this.minsize) return -1;
+    else return this.sum/this.v.length;
+  },
+  reset: function(x) {
+    this.v = [];
+    this.sum = 0;
+  }
+}
+
 export default class DQN{
     constructor(opt){
       this.temporal_window = typeof opt.temporal_window !== 'undefined' ? opt.temporal_window : 1; 
@@ -11,6 +55,18 @@ export default class DQN{
       this.epsilon_min = typeof opt.epsilon_min !== 'undefined' ? opt.epsilon_min : 0.05;
       this.epsilon_test_time = typeof opt.epsilon_test_time !== 'undefined' ? opt.epsilon_test_time : 0.01;
       
+      if (typeof opt.num_actions === "number"){
+        this.num_actions = opt.num_actions;
+      } else{
+        throw new Error("num_actions must be specified");
+      }
+
+      if (typeof opt.num_states === "number"){
+        this.num_states = opt.num_states;
+      } else{
+        throw new Error("num_states must be specified");
+      }
+
       if(typeof opt.random_action_distribution !== 'undefined') {
         this.random_action_distribution = opt.random_action_distribution;
         if(this.random_action_distribution.length !== num_actions) {
@@ -22,9 +78,7 @@ export default class DQN{
       } else {
         this.random_action_distribution = [];
       }
-      this.net_inputs = num_states * this.temporal_window + num_actions * this.temporal_window + num_states;
-      this.num_states = num_states;
-      this.num_actions = num_actions;
+      this.net_inputs = this.num_states * this.temporal_window + this.num_actions * this.temporal_window + this.num_states;
       this.window_size = Math.max(this.temporal_window, 2); // must be at least 2, but if we want more context even more
       this.state_window = new Array(this.window_size);
       this.action_window = new Array(this.window_size);
@@ -48,17 +102,35 @@ export default class DQN{
       this.epsilon = 1.0; // controls exploration exploitation tradeoff. Should be annealed over time
       this.latest_reward = 0;
       this.last_input_array = [];
-      this.average_reward_window = new cnnutil.Window(1000, 10);
-      this.average_loss_window = new cnnutil.Window(1000, 10);
+      this.average_reward_window = new Window(1000, 10);
+      this.average_loss_window = new Window(1000, 10);
+      this.learning = true;
     }
+
+    getNetInput(xt) {
+      // return s = (x,a,x,a,x,a,xt) state vector. 
+      // It's a concatenation of last window_size (x,a) pairs and current state x
+      var w = [];
+      w = w.concat(xt); // start with current state
+      // and now go backwards and append states and actions from history temporal_window times
+      var n = this.window_size; 
+      for(var k=0;k<this.temporal_window;k++) {
+        // state
+        w = w.concat(this.state_window[n-1-k]);
+        // action, encoded as 1-of-k indicator vector. We scale it up a bit because
+        // we dont want weight regularization to undervalue this information, as it only exists once
+        var action1ofk = new Array(this.num_actions);
+        for(var q=0;q<this.num_actions;q++) action1ofk[q] = 0.0;
+        action1ofk[this.action_window[n-1-k]] = 1.0*this.num_states;
+        w = w.concat(action1ofk);
+      }
+      return w;
+    }
+
     train(){
 
     }
     policy(s) {
-        // compute the value of doing any action in this state
-        // and return the argmax action and its value
-        var svol = new convnetjs.Vol(1, 1, this.net_inputs);
-        svol.w = s;
         let tens = tf.tensor(s);
         tens = tens.reshape([1, 65]);
         var action_values = this.NN.apply(tens);
@@ -91,7 +163,7 @@ export default class DQN{
           } else {
             // otherwise use our policy to make decision
             var maxact = this.policy(net_input);
-            action = maxact.value;
+            action = maxact.action;
          }
         } else {
           // pathological case that happens first few iterations 
@@ -110,6 +182,25 @@ export default class DQN{
         
         return action;
       }
+
+      random_action() {
+        // a bit of a helper function. It returns a random action
+        // we are abstracting this away because in future we may want to 
+        // do more sophisticated things. For example some actions could be more
+        // or less likely at "rest"/default state.
+        if(this.random_action_distribution.length === 0) {
+          return getRandomInt(0, this.num_actions);
+        } else {
+          // okay, lets do some fancier sampling:
+          var p = getRandomArbitrary(0, 1.0);
+          var cumprob = 0.0;
+          for(var k=0;k<this.num_actions;k++) {
+            cumprob += this.random_action_distribution[k];
+            if(p < cumprob) { return k; }
+          }
+        }
+      }
+
       backward(reward) {
         this.latest_reward = reward;
         this.average_reward_window.add(reward);
@@ -134,32 +225,17 @@ export default class DQN{
             this.experience.push(e);
           } else {
             // replace. finite memory!
-            var ri = convnetjs.randi(0, this.experience_size);
+            var ri = getRandomInt(0, this.experience_size);
             this.experience[ri] = e;
           }
         }
         const lossFunction = () => tf.tidy(()=>{
-          let x_tensor = tf.tensor(x.w, [1, 65]);
+          let x_tensor = tf.tensor(x, [1, 65]);
           let y_tensor = tf.tensor(y);
           let y_s = tf.tensor(y_new);
           let output = this.NN.apply(x_tensor);
           output = output.reshape([output.shape[1]]);
-          // console.log("output %s y_s %s mul_strict: %s y_tensor  %s", 
-          // JSON.stringify(output.dataSync()), 
-          // JSON.stringify(y_s.dataSync()), 
-          // JSON.stringify(tf.mulStrict(output, y_s).dataSync()),
-          // JSON.stringify(y_tensor.dataSync()),
-          // );
           const loss = tf.mulStrict(output, y_s).sub(y_tensor).square().sum().mul(0.5);
-          //const loss = output.sub(y_tensor).square().sum().mul(0.5);
-  
-          // console.log("tf.mulStrict(output, y_s) %s tf.mulStrict(output, y_s).sub(y_tensor) %s tf.mulStrict(output, y_s).sub(y_tensor).square(): %s tf.mulStrict(output, y_s).sub(y_tensor).square().sum()  %s", 
-          // JSON.stringify(tf.mulStrict(output, y_s).dataSync()), 
-          // JSON.stringify(tf.mulStrict(output, y_s).sub(y_tensor).dataSync()), 
-          // JSON.stringify(tf.mulStrict(output, y_s).sub(y_tensor).square().dataSync()),
-          // JSON.stringify(tf.mulStrict(output, y_s).sub(y_tensor).square().sum().dataSync()),
-          // );
-  
           return loss;
         });
         // learn based on experience, once we have some samples to go on
@@ -167,10 +243,9 @@ export default class DQN{
         if(this.experience.length > this.start_learn_threshold) {
           var avcost = 0.0;
           for(var k=0;k < this.BATCH_SIZE;k++) {
-            var re = convnetjs.randi(0, this.experience.length);
+            var re = getRandomInt(0, this.experience.length);
             var e = this.experience[re];
-            var x = new convnetjs.Vol(1, 1, this.net_inputs);
-            x.w = e.state0;
+            var x = e.state0;
             var maxact = this.policy(e.state1);
             var r = e.reward0 + this.gamma * maxact.value;
             var y = [0, 0, 0, 0,0];
