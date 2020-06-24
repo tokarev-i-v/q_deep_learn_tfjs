@@ -127,16 +127,16 @@ export default class DQN{
       return w;
     }
 
-    train(){
-
-    }
-    policy(s) {
+    async policy(s) {
         let tens = tf.tensor(s);
-        tens = tens.reshape([1, this.net_inputs]);
+        tens1 = tens.reshape([1, this.net_inputs]);
+        tf.dispose(tens)
         var action_values = this.NN.apply(tens);
-        let ret = {action: action_values.argMax(1).dataSync()[0], value: action_values.max().dataSync()[0] };
-        action_values.dispose();
-        tens.dispose();
+        var argm = await action_values.argMax(1).dataSync()[0];
+        var val = await action_values.max().dataSync()[0];
+        let ret = {action: argm, value: val };
+        tf.dispose(action_values);
+        tf.dispose(tens);
         return ret;
       }
 
@@ -201,7 +201,7 @@ export default class DQN{
         }
       }
 
-      backward(reward) {
+      async backward(reward) {
         this.latest_reward = reward;
         this.average_reward_window.add(reward);
         this.reward_window.shift();
@@ -240,6 +240,8 @@ export default class DQN{
         });
         if(this.experience.length > this.start_learn_threshold) {
           var avcost = 0.0;
+          var ys = [];
+          var xs = [];
           for(var k=0;k < this.BATCH_SIZE;k++) {
             var re = getRandomInt(0, this.experience.length);
             var e = this.experience[re];
@@ -251,14 +253,15 @@ export default class DQN{
             var y_new = new Array(this.num_actions); for (let i=0; i<this.num_actions; ++i) y_new[i] = 0; 
             y_new[e.action0] = 1;
   
-            const grads = tf.variableGrads(lossFunction, this.NN.getWeights());
+            var grads = tf.variableGrads(lossFunction, this.NN.getWeights());
             this.optimizer.applyGradients(grads.grads);
-            avcost += lossFunction().dataSync()[0];
+            tf.dispose(grads);
+            // avcost += lossFunction().dataSync()[0];
           }
   
-          avcost = avcost/this.BATCH_SIZE;
-          this.average_loss_window.add(avcost);
-          console.log("avg: %s", this.average_loss_window.get_average())
+          // avcost = avcost/this.BATCH_SIZE;
+          // this.average_loss_window.add(avcost);
+          // console.log("avg: %s", this.average_loss_window.get_average())
         }
       }
 }

@@ -148,7 +148,7 @@ class Agent{
     //this.rot2 = 0;
   }
 
-  backward() {
+  async backward() {
     // in backward pass agent learns.
     // compute reward 
     var proximity_reward = 0.0;
@@ -385,7 +385,6 @@ export default class FlatAreaEatWorld {
       //         this.Mixer.update(delta);
       //     }
       
-      //this.agents[0].brain.visSelf(document.getElementById('brain_info_div'));
       this.Controls.update(delta);
   }
 
@@ -414,13 +413,14 @@ export default class FlatAreaEatWorld {
       this.items.splice(this.items.indexOf(it), 1);
     }
 
-    step() {
-      this.tick();
-      if(!this.skipdraw || this.clock % 50 === 0) {
-        this.render();
-        //draw_stats();
-        //draw_net();
-      }
+    async step() {
+      this.tick().then(()=>{
+        if(!this.skipdraw || this.clock % 50 === 0) {
+          this.render();
+          //draw_stats();
+          //draw_net();
+        }  
+      })
     }
 
     start() {
@@ -428,7 +428,7 @@ export default class FlatAreaEatWorld {
       this.step();
     }
 
-    tick() {
+    async tick() {
       // tick the environment
       this.clock++;
       
