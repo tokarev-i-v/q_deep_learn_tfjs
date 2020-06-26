@@ -297,7 +297,7 @@ export default class FlatAreaEatWorld {
       for(var k=0;k<4000;k++) {
         this.generateItem();
       }
-      let agent = new Agent({eyes_count: 17, algo: opt.agent});
+      let agent = new Agent({eyes_count: 10, algo: opt.agent});
       this.Scene.add(agent.view);
       this.agents.push(agent);
     }   
